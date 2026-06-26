@@ -1,4 +1,4 @@
-const API = "http://localhost:3001/api"
+const API = import.meta.env.DEV ? "http://localhost:3001/api" : "/api"
 
 function headers(tenantId?: string): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" }
