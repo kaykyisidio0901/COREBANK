@@ -511,6 +511,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveTenantDataToStorage(tenantId)
   })
 
+  // Fetch tenants from server when admin is authenticated
+  useEffect(() => {
+    if (user !== "admin" || tenantId !== "corebank") return
+    api.fetchTenants()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: TenantAdmin[] = data.map((t: Record<string, unknown>) => ({
+            tenantId: t.id as string,
+            operator: t.operator as string,
+            senha: t.senha as string,
+            status: t.status as "ativo" | "inativo",
+            dataCriacao: t.created_at as string,
+            ultimoAcesso: t.ultimo_acesso as string,
+          }))
+          setTenantsCadastrados(mapped)
+          localStorage.setItem("corebank_tenants", JSON.stringify(mapped))
+        }
+      })
+      .catch(() => {})
+  }, [user, tenantId])
+
   return (
     <AppContext.Provider value={{ dashboard, flowItems, saldoDisponivel, capitalMinimo, tetoRisco, saldoBaixo, clientes, contratos, transacoes, injetarCapital, retirarCapital, setCapitalMinimo, setTetoRisco, adicionarCliente, atualizarClienteLocal, adicionarContrato, registrarPagamento, isCamouflaged, camuflagemSkin, setCamuflagemSkin, toggleCamouflage, panicMode, ativarPanic, tenantId, user, isAuthenticated, login, logout, tenantsCadastrados, adicionarTenant, toggleTenantStatus }}>
       {children}
