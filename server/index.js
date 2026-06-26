@@ -323,7 +323,7 @@ app.post("/api/panic", requireTenant, (req, res) => {
 
 // SPA fallback — serve index.html for all non-API routes in production
 if (process.env.NODE_ENV === "production") {
-  app.get("*", (req, res) => {
+  app.get("/{*path}", (req, res) => {
     res.sendFile(path.join(__dirname, "../dist/index.html"))
   })
 }
