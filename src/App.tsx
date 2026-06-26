@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { AppProvider, useApp } from "./context/AppContext"
 import { Layout } from "./components/Layout"
 import { Dashboard } from "./pages/Dashboard"
@@ -23,7 +23,7 @@ function AppRoutes() {
         <Route path="/fluxo" element={<Caixa />} />
         <Route path="/capital" element={<GestaoCapital />} />
         <Route path="/config" element={<Configuracoes />} />
-        <Route path="/admin" element={isAdmin ? <PainelAdmin /> : <Navigate to="/" replace />} />
+        <Route path="/admin" element={<PainelAdmin />} />
       </Route>
     </Routes>
   )
