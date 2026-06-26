@@ -8,14 +8,14 @@ import db from "./database.js"
 const app = express()
 const PORT = process.env.PORT || 3001
 
+app.use(cors())
+app.use(express.json({ limit: "10mb" }))
+
 // Serve built frontend in production
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../dist")))
 }
-
-app.use(cors())
-app.use(express.json({ limit: "10mb" }))
 
 // ─── Multi‑tenant helper ───────────────────────────────────────────────
 function requireTenant(req, res, next) {
@@ -323,8 +323,12 @@ app.post("/api/panic", requireTenant, (req, res) => {
 
 // SPA fallback — serve index.html for all non-API routes in production
 if (process.env.NODE_ENV === "production") {
-  app.get("/{*path}", (req, res) => {
-    res.sendFile(path.join(__dirname, "../dist/index.html"))
+  app.use((req, res, next) => {
+    if (req.method === "GET" && !req.path.startsWith("/api/")) {
+      res.sendFile(path.join(__dirname, "../dist/index.html"))
+    } else {
+      next()
+    }
   })
 }
 
