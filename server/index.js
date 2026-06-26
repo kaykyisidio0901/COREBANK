@@ -345,6 +345,14 @@ db.exec(`
   );
 `)
 
+// Seed default admin tenant if none exist
+const tenantCount = db.prepare("SELECT COUNT(*) as count FROM tenants").get().count
+if (tenantCount === 0) {
+  const hash = bcrypt.hashSync("admin123", 10)
+  db.prepare("INSERT INTO tenants (id, operator, senha) VALUES (?, 'admin', ?)").run("corebank", hash)
+  console.log("[Seed] Tenant 'corebank' criado com operador 'admin' e senha 'admin123'")
+}
+
 app.listen(PORT, () => {
   console.log(`[CoreBank Server] Rodando em http://localhost:${PORT}`)
 })
