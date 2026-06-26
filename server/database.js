@@ -3,7 +3,8 @@ import path from "path"
 import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const dbPath = path.join(__dirname, "corebank.db")
+const DATA_DIR = process.env.RENDER_DISK_PATH || __dirname
+const dbPath = path.join(DATA_DIR, "corebank.db")
 
 const db = new Database(dbPath)
 
