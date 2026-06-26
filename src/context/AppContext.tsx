@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from "react"
-import type { Cliente, Contrato, ParcelaContrato, Transacao, TenantAdmin, FlowItem, DashboardData } from "../types"
+import type { Cliente, Contrato, ParcelaContrato, Transacao, TenantAdmin, FlowItem, DashboardData, CategoryRisk } from "../types"
 import type { DadosCliente } from "../components/Dashboard/CadastroCliente"
+import * as api from "../api/client"
 
 function nowTimestamp() {
   const d = new Date()
@@ -31,6 +32,7 @@ interface AppContextType {
   setCapitalMinimo: (valor: number) => void
   setTetoRisco: (valor: number) => void
   adicionarCliente: (dados: DadosCliente) => Cliente
+  atualizarClienteLocal: (id: string, campos: Partial<Cliente>) => void
   adicionarContrato: (params: {
     clienteId: string
     nome: string
@@ -107,15 +109,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const inadimplencia = totalParcelas > 0 ? parseFloat(((parcelasAtrasadas / totalParcelas) * 100).toFixed(1)) : 0
     const projecaoRetorno = contratos.reduce((sum, c) => sum + c.valorTotal, 0)
 
+    // Group contracts into risk categories based on client score
+    let baixo = 0, medio = 0, alto = 0
+    contratos.forEach((c) => {
+      const cliente = clientes.find((cl) => cl.id === c.clienteId)
+      const score = cliente?.score ?? 500
+      if (score >= 700) baixo++
+      else if (score >= 300) medio++
+      else alto++
+    })
+    const total = baixo + medio + alto || 1
+    const categoryRisk: CategoryRisk[] = [
+      { name: "Baixo Risco", value: parseFloat(((baixo / total) * 100).toFixed(1)), color: "#00e55b", contracts: baixo },
+      { name: "Médio Risco", value: parseFloat(((medio / total) * 100).toFixed(1)), color: "#ffb4ab", contracts: medio },
+      { name: "Alto Risco", value: parseFloat(((alto / total) * 100).toFixed(1)), color: "#FF3838", contracts: alto },
+    ]
+
     return {
       capitalAlocado,
       projecaoRetorno,
       inadimplencia,
       saldoDisponivel,
       flow: [],
-      categoryRisk: [],
+      categoryRisk,
     }
-  }, [saldoDisponivel, contratos])
+  }, [saldoDisponivel, contratos, clientes])
 
   const flowItems = useMemo<FlowItem[]>(() => {
     const items: FlowItem[] = []
@@ -167,8 +185,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date()
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`
     const origemStr = origem ? ` (${origem})` : ""
-    setTransacoes((prev) => [{ timestamp: nowTimestamp(), tipo: "APORTE", descricao: "Injeção de capital no caixa", origem: origem || "Caixa Externo", hash: gerarHashCurto(), valor }, ...prev])
+    const tx: Transacao = { timestamp: nowTimestamp(), tipo: "APORTE", descricao: "Injeção de capital no caixa", origem: origem || "Caixa Externo", hash: gerarHashCurto(), valor }
+    setTransacoes((prev) => [tx, ...prev])
     window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CAPITAL] ${time} — Aporte de R$ ${valor.toFixed(2)} recebido${origemStr}. Novo saldo: R$ ${(saldoDisponivel + valor).toFixed(2)}.` }))
+    api.aporteCapital(tenantId, valor, origem).catch((err) => console.warn("[API] aporteCapital falhou:", err))
   }
 
   const retirarCapital = (valor: number, motivo: string) => {
@@ -176,8 +196,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date()
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`
     const motivoStr = motivo ? ` (${motivo})` : ""
-    setTransacoes((prev) => [{ timestamp: nowTimestamp(), tipo: "SANGRIA", descricao: "Retirada de lucro do caixa", origem: motivo || "Sangria manual", hash: gerarHashCurto(), valor }, ...prev])
+    const tx: Transacao = { timestamp: nowTimestamp(), tipo: "SANGRIA", descricao: "Retirada de lucro do caixa", origem: motivo || "Sangria manual", hash: gerarHashCurto(), valor }
+    setTransacoes((prev) => [tx, ...prev])
     window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CAPITAL] ${time} — Sangria de R$ ${valor.toFixed(2)} realizada${motivoStr}. Novo saldo: R$ ${Math.max(0, saldoDisponivel - valor).toFixed(2)}.` }))
+    api.sangriaCapital(tenantId, valor, motivo).catch((err) => console.warn("[API] sangriaCapital falhou:", err))
   }
 
   const registrarPagamento = (clienteNome: string, valor: number, contratoId: string) => {
@@ -222,13 +244,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
     }
 
-    setTransacoes((prev) => [{ timestamp: nowTimestamp(), tipo: "PAGAMENTO", descricao: `Pagamento recebido de ${clienteNome}${cliente ? "" : " (cliente não localizado)"}`, origem: clienteNome, hash: gerarHashCurto(), valor, contratoId, clienteId: cliente?.id }, ...prev])
+    const tx: Transacao = { timestamp: nowTimestamp(), tipo: "PAGAMENTO", descricao: `Pagamento recebido de ${clienteNome}${cliente ? "" : " (cliente não localizado)"}`, origem: clienteNome, hash: gerarHashCurto(), valor, contratoId, clienteId: cliente?.id }
+    setTransacoes((prev) => [tx, ...prev])
     window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CAIXA] ${time} — Pagamento de R$ ${valor.toFixed(2)} recebido de ${clienteNome}.${cliente ? ` Devedor atualizado: R$ ${Math.max(0, cliente.devedor - valor).toFixed(2)}.` : " Cliente não localizado no banco."} Contrato: ${contratoId}.` }))
+    api.registrarPagamentoApi(tenantId, { clienteNome, valor, contratoId }).catch((err) => console.warn("[API] registrarPagamentoApi falhou:", err))
   }
 
   const toggleCamouflage = () => setIsCamouflaged((prev) => !prev)
 
   const ativarPanic = () => {
+    api.panicApi(tenantId).catch(() => {})
     setPanicMode(true)
     setIsCamouflaged(false)
     setClientes([])
@@ -242,7 +267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     logout()
   }
 
-  const login = (tenant: string, usuario: string) => {
+  const login = async (tenant: string, usuario: string) => {
     // Save current tenant data before switching
     saveTenantDataToStorage(tenantId)
 
@@ -252,7 +277,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("corebank_tenant", tenant)
     localStorage.setItem("corebank_user", usuario)
 
-    // Load the requested tenant's data
+    // Try loading from server first
+    try {
+      const [clientesData, contratosData, transacoesData, caixaData] = await Promise.all([
+        api.fetchClientes(tenant),
+        api.fetchContratos(tenant),
+        api.fetchTransacoes(tenant),
+        api.fetchCaixa(tenant),
+      ])
+      setClientes(clientesData)
+      setContratos(contratosData)
+      setTransacoes(transacoesData)
+      setSaldoDisponivel(caixaData.saldoDisponivel ?? 0)
+      return
+    } catch {
+      // Server offline — fall back to localStorage
+    }
+
+    // Fallback: load from localStorage
     const saved = localStorage.getItem(`corebank_data_${tenant}`)
     if (saved) {
       try {
@@ -307,6 +349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = [...tenantsCadastrados, novo]
     setTenantsCadastrados(updated)
     localStorage.setItem("corebank_tenants", JSON.stringify(updated))
+    api.createTenant({ tenantId: tid, operator }).catch((err) => console.warn("[API] createTenant falhou:", err))
   }
 
   const toggleTenantStatus = (tid: string) => {
@@ -315,6 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
     setTenantsCadastrados(updated)
     localStorage.setItem("corebank_tenants", JSON.stringify(updated))
+    api.toggleTenantStatusApi(tid).catch((err) => console.warn("[API] toggleTenantStatusApi falhou:", err))
   }
 
   const adicionarCliente = (dados: DadosCliente): Cliente => {
@@ -341,13 +385,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       endereco: dados.enderecoPrincipal,
       enderecoComercial: dados.enderecoSecundario || "Mesmo endereço",
       notaInterna: "Cliente cadastrado via sistema.",
+      fep: dados.fep,
+      telefone2: dados.telefone2,
+      telefone3: dados.telefone3,
+      enderecoSecundario: dados.enderecoSecundario,
+      rgBase64: dados.rgPreview || "",
+      comprovanteBase64: dados.comprovantePreview || "",
     }
 
     setClientes((prev) => [...prev, novo])
 
     window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CADASTRO] ${time} — Novo perfil confidencial cadastrado: ${dados.nome}. Pontuação inicial: 500 pts. ID: ${hash}.` }))
 
+    api.createCliente(tenantId, {
+      id: hash,
+      nome: dados.nome,
+      cpf: dados.cpf,
+      telefone: dados.telefone1,
+      endereco: dados.enderecoPrincipal,
+      enderecoComercial: dados.enderecoSecundario,
+      notaInterna: "Cliente cadastrado via sistema.",
+      fep: dados.fep || "",
+      telefone2: dados.telefone2 || "",
+      telefone3: dados.telefone3 || "",
+      enderecoSecundario: dados.enderecoSecundario || "",
+      rgBase64: dados.rgPreview || "",
+      comprovanteBase64: dados.comprovantePreview || "",
+    }).catch((err) => console.warn("[API] createCliente falhou:", err))
+
     return novo
+  }
+
+  const atualizarClienteLocal = (id: string, campos: Partial<Cliente>) => {
+    setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, ...campos } : c)))
+    api.updateCliente(tenantId, id, campos).catch((err) => console.warn("[API] updateCliente falhou:", err))
   }
 
   const adicionarContrato = (params: {
@@ -414,6 +485,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CONTRATO] ${time} — Contrato ${hash} registrado para ${params.nome}. Valor: R$ ${params.valorPrincipal.toFixed(2)}. Total c/ juros: R$ ${params.valorTotal.toFixed(2)} em ${params.numParcelas}x. Saldo debitado: R$ ${params.valorPrincipal.toFixed(2)}.` }))
 
+    api.createContrato(tenantId, {
+      id: contrato.id,
+      clienteId: contrato.clienteId,
+      nome: contrato.nome,
+      cpf: contrato.cpf,
+      telefone: contrato.telefone,
+      valorPrincipal: contrato.valorPrincipal,
+      valorTotal: contrato.valorTotal,
+      taxa: contrato.taxa,
+      tipoJuros: contrato.tipoJuros,
+      numParcelas: contrato.numParcelas,
+      intervalo: contrato.intervalo,
+      dataCriacao: contrato.dataCriacao,
+      hash: contrato.hash,
+      parcelas: contrato.parcelas.map((p) => ({ numero: p.numero, valor: p.valor, vencimento: p.vencimento, status: p.status })),
+    }).catch((err) => console.warn("[API] createContrato falhou:", err))
+
     return contrato
   }
 
@@ -424,7 +512,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   })
 
   return (
-    <AppContext.Provider value={{ dashboard, flowItems, saldoDisponivel, capitalMinimo, tetoRisco, saldoBaixo, clientes, contratos, transacoes, injetarCapital, retirarCapital, setCapitalMinimo, setTetoRisco, adicionarCliente, adicionarContrato, registrarPagamento, isCamouflaged, camuflagemSkin, setCamuflagemSkin, toggleCamouflage, panicMode, ativarPanic, tenantId, user, isAuthenticated, login, logout, tenantsCadastrados, adicionarTenant, toggleTenantStatus }}>
+    <AppContext.Provider value={{ dashboard, flowItems, saldoDisponivel, capitalMinimo, tetoRisco, saldoBaixo, clientes, contratos, transacoes, injetarCapital, retirarCapital, setCapitalMinimo, setTetoRisco, adicionarCliente, atualizarClienteLocal, adicionarContrato, registrarPagamento, isCamouflaged, camuflagemSkin, setCamuflagemSkin, toggleCamouflage, panicMode, ativarPanic, tenantId, user, isAuthenticated, login, logout, tenantsCadastrados, adicionarTenant, toggleTenantStatus }}>
       {children}
     </AppContext.Provider>
   )

@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SQLite database files
+server/corebank.db
+server/corebank.db-shm
+server/corebank.db-wal

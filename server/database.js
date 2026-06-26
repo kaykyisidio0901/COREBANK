@@ -11,139 +11,100 @@ db.pragma("journal_mode = WAL")
 db.pragma("foreign_keys = ON")
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL CHECK(category IN ('Comercial','Pessoal','Autónomo')),
-    phone TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS loans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    interest_rate REAL NOT NULL,
-    interest_period TEXT NOT NULL CHECK(interest_period IN ('month','week')),
+  CREATE TABLE IF NOT EXISTS tenants (
+    id TEXT PRIMARY KEY,
+    operator TEXT NOT NULL,
+    senha TEXT DEFAULT '—',
+    status TEXT DEFAULT 'ativo',
     created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+    ultimo_acesso TEXT DEFAULT '—'
   );
 
-  CREATE TABLE IF NOT EXISTS installments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    loan_id INTEGER NOT NULL,
-    due_date TEXT NOT NULL,
-    amount REAL NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending','paid','late')),
-    paid_at TEXT,
-    late_days INTEGER DEFAULT 0,
-    late_fee REAL DEFAULT 0,
-    FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE
+  CREATE TABLE IF NOT EXISTS clientes (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    cpf TEXT DEFAULT '',
+    telefone TEXT DEFAULT '',
+    alocado REAL DEFAULT 0,
+    devedor REAL DEFAULT 0,
+    ultimo_pgto TEXT DEFAULT '—',
+    status TEXT DEFAULT 'em-dia',
+    score INTEGER DEFAULT 0,
+    nivel TEXT DEFAULT 'Baixo',
+    endereco TEXT DEFAULT '',
+    endereco_comercial TEXT DEFAULT '',
+    nota_interna TEXT DEFAULT '',
+    fep TEXT DEFAULT '',
+    telefone2 TEXT DEFAULT '',
+    telefone3 TEXT DEFAULT '',
+    endereco_secundario TEXT DEFAULT '',
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
   );
 
-  CREATE TABLE IF NOT EXISTS payment_records (
+  CREATE TABLE IF NOT EXISTS contratos (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    cliente_id TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    cpf TEXT DEFAULT '',
+    telefone TEXT DEFAULT '',
+    valor_principal REAL NOT NULL,
+    valor_total REAL NOT NULL,
+    taxa REAL NOT NULL,
+    tipo_juros TEXT NOT NULL,
+    num_parcelas INTEGER NOT NULL,
+    intervalo TEXT NOT NULL,
+    data_criacao TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS parcelas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL,
-    client_name TEXT NOT NULL,
-    amount REAL NOT NULL,
-    date TEXT DEFAULT (datetime('now')),
-    status TEXT DEFAULT 'pending_confirm' CHECK(status IN ('confirmed','pending_confirm')),
-    type TEXT DEFAULT 'received' CHECK(type IN ('received','sent')),
-    description TEXT DEFAULT '',
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+    contrato_id TEXT NOT NULL,
+    numero INTEGER NOT NULL,
+    valor REAL NOT NULL,
+    vencimento TEXT NOT NULL,
+    status TEXT DEFAULT 'Aguardando',
+    FOREIGN KEY (contrato_id) REFERENCES contratos(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS transacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    descricao TEXT DEFAULT '',
+    origem TEXT DEFAULT '',
+    hash TEXT DEFAULT '',
+    valor REAL NOT NULL,
+    contrato_id TEXT,
+    cliente_id TEXT,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS historico_score (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    pontos INTEGER NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS estado_tenant (
+    tenant_id TEXT PRIMARY KEY,
+    capital_minimo REAL DEFAULT 5000,
+    teto_risco REAL DEFAULT 5000,
+    is_camouflaged INTEGER DEFAULT 0,
+    camuflagem_skin TEXT DEFAULT 'Planilha de Excel Corporativa'
   );
 `)
 
-function seed() {
-  const count = db.prepare("SELECT COUNT(*) as c FROM clients").get()
-  if (count.c > 0) return
-
-  const insertClient = db.prepare("INSERT INTO clients (name, category, phone) VALUES (?, ?, ?)")
-  const insertLoan = db.prepare("INSERT INTO loans (client_id, amount, interest_rate, interest_period) VALUES (?, ?, ?, ?)")
-  const insertInstallment = db.prepare("INSERT INTO installments (loan_id, due_date, amount, status, paid_at, late_days, late_fee) VALUES (?, ?, ?, ?, ?, ?, ?)")
-  const insertPayment = db.prepare("INSERT INTO payment_records (client_id, client_name, amount, date, status, type, description) VALUES (?, ?, ?, ?, ?, ?, ?)")
-
-  const tx = db.transaction(() => {
-    insertClient.run("Marcos Mecânico", "Comercial", "5511999999991")
-    insertClient.run("Cláudio Chaveiro", "Comercial", "5511999999992")
-    insertClient.run("Ana Beatriz Cabeleireira", "Autónomo", "5511999999993")
-    insertClient.run("Seu Jorge Mercearia", "Comercial", "5511999999994")
-    insertClient.run("Dra. Renata Clínica", "Pessoal", "5511999999995")
-    insertClient.run("Lucas Entregador", "Autónomo", "5511999999996")
-
-    insertLoan.run(1, 5000, 10, "month")
-    insertLoan.run(2, 2000, 15, "week")
-    insertLoan.run(3, 3000, 12, "month")
-    insertLoan.run(4, 8000, 8, "month")
-    insertLoan.run(5, 10000, 7, "month")
-    insertLoan.run(6, 1500, 20, "week")
-
-    const today = new Date()
-    const fmt = (d) => d.toISOString().split("T")[0]
-
-    // Marcos: 5 parcels, first one due today
-    for (let i = 0; i < 5; i++) {
-      const d = new Date(today)
-      d.setMonth(d.getMonth() + i)
-      const status = i === 0 ? "pending" : "pending"
-      insertInstallment.run(1, fmt(d), 1100, status, null, 0, 0)
-    }
-
-    // Claudio: 4 parcels, first one late 4 days
-    for (let i = 0; i < 4; i++) {
-      const d = new Date(today)
-      d.setDate(d.getDate() + i * 7 - (i === 0 ? 4 : 0))
-      const status = i === 0 ? "late" : "pending"
-      const lateDays = i === 0 ? 4 : 0
-      const lateFee = i === 0 ? 30 * 4 : 0
-      insertInstallment.run(2, fmt(d), 575, status, null, lateDays, lateFee)
-    }
-
-    // Ana: 3 parcels
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(today)
-      d.setMonth(d.getMonth() + i)
-      const status = i === 0 ? "paid" : "pending"
-      const paidAt = i === 0 ? fmt(new Date(today.getTime() - 2 * 86400000)) : null
-      insertInstallment.run(3, fmt(d), 1120, status, paidAt, 0, 0)
-    }
-
-    // Seu Jorge: 6 parcels
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(today)
-      d.setMonth(d.getMonth() + i)
-      insertInstallment.run(4, fmt(d), 1450, "pending", null, 0, 0)
-    }
-
-    // Dra. Renata: 12 parcels (first 3 paid)
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(today)
-      d.setMonth(d.getMonth() + i)
-      const status = i < 3 ? "paid" : "pending"
-      const paidAt = i < 3 ? fmt(new Date(today.getTime() - (3 - i) * 30 * 86400000)) : null
-      insertInstallment.run(5, fmt(d), 950, status, paidAt, 0, 0)
-    }
-
-    // Lucas: 4 parcels
-    for (let i = 0; i < 4; i++) {
-      const d = new Date(today)
-      d.setDate(d.getDate() + i * 7)
-      insertInstallment.run(6, fmt(d), 450, "pending", null, 0, 0)
-    }
-
-    // Payment records (audit trail)
-    const past = (days) => fmt(new Date(today.getTime() - days * 86400000))
-    insertPayment.run(3, "Ana Beatriz Cabeleireira", 1120, past(2), "confirmed", "received", "Pagamento parcela #1")
-    insertPayment.run(5, "Dra. Renata Clínica", 950, past(35), "confirmed", "received", "Pagamento parcela #1")
-    insertPayment.run(5, "Dra. Renata Clínica", 950, past(5), "confirmed", "received", "Pagamento parcela #2")
-    insertPayment.run(5, "Dra. Renata Clínica", 950, past(1), "confirmed", "received", "Pagamento parcela #3")
-    insertPayment.run(1, "Marcos Mecânico", 1100, past(30), "confirmed", "received", "Pagamento parcela #1")
-    insertPayment.run(4, "Seu Jorge Mercearia", 1450, past(30), "confirmed", "received", "Pagamento parcela #1")
-  })
-
-  tx()
-}
-
-seed()
+// Safe migrations (run on every start, ignore if column exists)
+try { db.exec("ALTER TABLE clientes ADD COLUMN rg_base64 TEXT DEFAULT ''") } catch {}
+try { db.exec("ALTER TABLE clientes ADD COLUMN comprovante_base64 TEXT DEFAULT ''") } catch {}
 
 export default db

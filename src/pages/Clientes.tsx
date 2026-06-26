@@ -1,6 +1,16 @@
 import { useState } from "react"
 import { CadastroCliente, type DadosCliente } from "../components/Dashboard/CadastroCliente"
 import { useApp } from "../context/AppContext"
+import { updateCliente } from "../api/client"
+
+function downloadBase64(base64: string, filename: string) {
+  const link = document.createElement("a")
+  link.href = base64
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
 function badgeNivel(nivel: string, score: number) {
   if (nivel === "Elite")
@@ -32,8 +42,9 @@ function badgeNivel(nivel: string, score: number) {
 }
 
 export function Clientes() {
-  const { clientes, adicionarCliente } = useApp()
+  const { clientes, adicionarCliente, atualizarClienteLocal } = useApp()
   const [filtro, setFiltro] = useState("todos")
+  const [searchTerm, setSearchTerm] = useState("")
   const [perfilAberto, setPerfilAberto] = useState<number | null>(null)
   const [cadastroAberto, setCadastroAberto] = useState(false)
 
@@ -43,6 +54,8 @@ export function Clientes() {
   }
 
   const filtrados = clientes.filter((c) => {
+    const matchSearch = !searchTerm || c.nome.toLowerCase().includes(searchTerm.toLowerCase()) || c.id.toLowerCase().includes(searchTerm.toLowerCase())
+    if (!matchSearch) return false
     if (filtro === "todos") return true
     if (filtro === "score-elite") return c.nivel === "Elite"
     if (filtro === "blacklist") return c.status === "blacklist"
@@ -67,6 +80,8 @@ export function Clientes() {
           <input
             type="text"
             placeholder="Buscar devedor pelo nome ou ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg py-2.5 pl-10 pr-4 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
           />
         </div>
@@ -233,6 +248,68 @@ export function Clientes() {
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Documentos */}
+          <div className="md:col-span-3 border-t border-zinc-800 pt-4 mt-2">
+            <h4 className="text-sm text-[#e0e0e0] font-mono font-[600] mb-4">Documentos do Cliente</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* RG */}
+              <div className="border border-zinc-800 rounded-lg p-4 bg-black/40">
+                <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-2">RG / Identidade</p>
+                {clientes[perfilAberto].rgBase64 ? (
+                  <div className="space-y-3">
+                    <div className="bg-zinc-900 rounded-lg overflow-hidden max-h-[240px] flex items-center justify-center">
+                      <img src={clientes[perfilAberto].rgBase64} alt="RG" className="max-w-full max-h-[240px] object-contain" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => downloadBase64(clientes[perfilAberto].rgBase64!, `RG_${clientes[perfilAberto].nome.replace(/\s+/g, "_")}.png`)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-mono text-[#e0e0e0] bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">download</span> Download
+                      </button>
+                      <button
+                        onClick={() => atualizarClienteLocal(clientes[perfilAberto].id, { rgBase64: "" })}
+                        className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-mono text-[#FF3838] bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span> Excluir
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#555] font-mono italic">Nenhum RG anexado</p>
+                )}
+              </div>
+
+              {/* Comprovante */}
+              <div className="border border-zinc-800 rounded-lg p-4 bg-black/40">
+                <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-2">Comprovante de Residência</p>
+                {clientes[perfilAberto].comprovanteBase64 ? (
+                  <div className="space-y-3">
+                    <div className="bg-zinc-900 rounded-lg overflow-hidden max-h-[240px] flex items-center justify-center">
+                      <img src={clientes[perfilAberto].comprovanteBase64} alt="Comprovante" className="max-w-full max-h-[240px] object-contain" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => downloadBase64(clientes[perfilAberto].comprovanteBase64!, `Comprovante_${clientes[perfilAberto].nome.replace(/\s+/g, "_")}.png`)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-mono text-[#e0e0e0] bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">download</span> Download
+                      </button>
+                      <button
+                        onClick={() => atualizarClienteLocal(clientes[perfilAberto].id, { comprovanteBase64: "" })}
+                        className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-mono text-[#FF3838] bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span> Excluir
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#555] font-mono italic">Nenhum comprovante anexado</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react"
 import { useApp } from "../context/AppContext"
+import { ContratoDetailModal } from "../components/Dashboard/ContratoDetailModal"
 
 type FiltroStatus = "todas" | "hoje" | "atrasadas" | "futuras"
 
@@ -38,6 +39,7 @@ function diffDias(dataStr: string) {
 export function Agenda() {
   const { contratos } = useApp()
   const [filtro, setFiltro] = useState<FiltroStatus>("todas")
+  const [contratoDetalhe, setContratoDetalhe] = useState<string | null>(null)
 
   const parcelas = useMemo(() => {
     const result: {
@@ -172,7 +174,8 @@ export function Agenda() {
           return (
             <div
               key={p.id}
-              className="bg-zinc-950/80 border border-zinc-800 p-4 rounded-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+              className="bg-zinc-950/80 border border-zinc-800 p-4 rounded-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer hover:border-zinc-700 transition-colors"
+              onClick={() => setContratoDetalhe(p.contratoId)}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3">
@@ -244,6 +247,11 @@ export function Agenda() {
           </p>
         )}
       </div>
+
+      <ContratoDetailModal
+        contratoId={contratoDetalhe}
+        onClose={() => setContratoDetalhe(null)}
+      />
     </div>
   )
 }

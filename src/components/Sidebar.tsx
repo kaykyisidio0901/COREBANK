@@ -9,6 +9,7 @@ const links = [
   { to: "/fluxo", label: "Auditoria de Caixa", icon: "account_balance_wallet" },
   { to: "/capital", label: "Gestão de Capital", icon: "account_balance" },
   { to: "/config", label: "Configurações de Segurança", icon: "security" },
+  { to: "/admin", label: "Painel Admin", icon: "admin_panel_settings" },
 ]
 
 export function Sidebar({ onMenuToggle }: { onMenuToggle: () => void }) {

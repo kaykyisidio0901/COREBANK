@@ -5,7 +5,9 @@ const links = [
   { to: "/clientes", label: "Carteira de Clientes", icon: "group" },
   { to: "/agenda", label: "Agenda de Recebimento", icon: "calendar_today" },
   { to: "/fluxo", label: "Auditoria de Caixa", icon: "account_balance_wallet" },
+  { to: "/capital", label: "Gestão de Capital", icon: "savings" },
   { to: "/config", label: "Configurações de Segurança", icon: "security" },
+  { to: "/admin", label: "Painel Admin", icon: "admin_panel_settings" },
 ]
 
 export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {

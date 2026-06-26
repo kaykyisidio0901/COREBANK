@@ -2,15 +2,27 @@ import type { FlowItem } from "../../types"
 
 function ActionButton({ item }: { item: FlowItem }) {
   const isLate = item.status === "late"
+  const handleClick = () => {
+    const action = isLate ? "COBRAR" : "NOTIFICAR"
+    window.dispatchEvent(new CustomEvent("corebank:log", {
+      detail: `[${action}] Ação disparada para ${item.client} — valor R$ ${item.value.toFixed(2)} — vencimento ${item.dueDate}`
+    }))
+  }
   if (isLate) {
     return (
-      <button className="w-full md:w-auto px-3 py-1 text-xs font-mono font-[600] text-[#ffb4ab] border border-[#ffb4ab]/30 hover:bg-[#ffb4ab]/10 transition-colors active:scale-[0.97] rounded">
+      <button
+        onClick={handleClick}
+        className="w-full md:w-auto px-3 py-1 text-xs font-mono font-[600] text-[#ffb4ab] border border-[#ffb4ab]/30 hover:bg-[#ffb4ab]/10 transition-colors active:scale-[0.97] rounded"
+      >
         COBRAR
       </button>
     )
   }
   return (
-    <button className="w-full md:w-auto px-3 py-1 text-xs font-mono font-[600] text-[#00e55b] border border-[#00e55b]/30 hover:bg-[#00e55b]/10 transition-colors active:scale-[0.97] rounded">
+    <button
+      onClick={handleClick}
+      className="w-full md:w-auto px-3 py-1 text-xs font-mono font-[600] text-[#00e55b] border border-[#00e55b]/30 hover:bg-[#00e55b]/10 transition-colors active:scale-[0.97] rounded"
+    >
       NOTIFICAR
     </button>
   )

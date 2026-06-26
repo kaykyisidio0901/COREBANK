@@ -36,6 +36,12 @@ export interface Cliente {
   endereco: string
   enderecoComercial: string
   notaInterna: string
+  fep?: string
+  telefone2?: string
+  telefone3?: string
+  enderecoSecundario?: string
+  rgBase64?: string
+  comprovanteBase64?: string
 }
 
 export interface ParcelaContrato {

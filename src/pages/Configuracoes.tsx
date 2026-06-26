@@ -2,10 +2,24 @@ import { useState } from "react"
 import { useApp } from "../context/AppContext"
 
 export function Configuracoes() {
-  const { isCamouflaged, camuflagemSkin, setCamuflagemSkin, toggleCamouflage, ativarPanic } = useApp()
+  const { isCamouflaged, camuflagemSkin, setCamuflagemSkin, toggleCamouflage, ativarPanic, tenantId } = useApp()
   const [showPanicModal, setShowPanicModal] = useState(false)
   const [panicSenha, setPanicSenha] = useState("")
   const [panicErro, setPanicErro] = useState(false)
+
+  const [taxaJuros, setTaxaJuros] = useState(() => localStorage.getItem(`corebank_config_${tenantId}_taxa`) || "3.5")
+  const [multaAtraso, setMultaAtraso] = useState(() => localStorage.getItem(`corebank_config_${tenantId}_multa`) || "5.00")
+  const [carencia, setCarencia] = useState(() => localStorage.getItem(`corebank_config_${tenantId}_carencia`) || "1")
+  const [configSaved, setConfigSaved] = useState(false)
+
+  const handleSalvarConfig = () => {
+    localStorage.setItem(`corebank_config_${tenantId}_taxa`, taxaJuros)
+    localStorage.setItem(`corebank_config_${tenantId}_multa`, multaAtraso)
+    localStorage.setItem(`corebank_config_${tenantId}_carencia`, carencia)
+    setConfigSaved(true)
+    setTimeout(() => setConfigSaved(false), 2000)
+    window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CONFIG] Parâmetros da banca atualizados: taxa ${taxaJuros}%, multa R$ ${multaAtraso}, carência ${carencia}d` }))
+  }
 
   const handleToggle = () => toggleCamouflage()
 
@@ -46,7 +60,8 @@ export function Configuracoes() {
               </label>
               <input
                 type="text"
-                defaultValue="3.5"
+                value={taxaJuros}
+                onChange={(e) => setTaxaJuros(e.target.value)}
                 className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] outline-none focus:border-[#00e55b]/50 transition-colors"
               />
             </div>
@@ -56,7 +71,8 @@ export function Configuracoes() {
               </label>
               <input
                 type="text"
-                defaultValue="5.00"
+                value={multaAtraso}
+                onChange={(e) => setMultaAtraso(e.target.value)}
                 className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] outline-none focus:border-[#00e55b]/50 transition-colors"
               />
             </div>
@@ -66,10 +82,20 @@ export function Configuracoes() {
               </label>
               <input
                 type="text"
-                defaultValue="1"
+                value={carencia}
+                onChange={(e) => setCarencia(e.target.value)}
                 className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] outline-none focus:border-[#00e55b]/50 transition-colors"
               />
             </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSalvarConfig}
+              className="px-4 py-2 text-xs font-mono font-[600] text-[#00e55b] bg-[#00e55b]/10 border border-[#00e55b]/30 rounded-lg hover:bg-[#00e55b]/20 transition-colors"
+            >
+              {configSaved ? "Salvo!" : "Salvar Parâmetros"}
+            </button>
+            {configSaved && <span className="text-[10px] text-[#00e55b] font-mono">✓ Configurações salvas</span>}
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom"
 import { Sidebar } from "./Sidebar"
 import { MatrixBg } from "./MatrixBg"
 import { MobileDrawer } from "./MobileDrawer"
+import { SystemLogs } from "./SystemLogs"
 import { useApp } from "../context/AppContext"
 
 function DisguiseExcel() {
@@ -161,6 +162,7 @@ export function Layout() {
               <Outlet />
             </main>
           </div>
+          <SystemLogs />
         </>
       )}
     </div>
