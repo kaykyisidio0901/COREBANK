@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom"
+import { useApp } from "../context/AppContext"
 
 const links = [
   { to: "/", label: "Painel Geral", icon: "dashboard" },
@@ -11,6 +12,9 @@ const links = [
 ]
 
 export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user, tenantId } = useApp()
+  const isAdmin = user === "admin" && tenantId === "corebank"
+  const visibleLinks = isAdmin ? links : links.filter((l) => l.to !== "/admin")
   return (
     <>
       {open && (

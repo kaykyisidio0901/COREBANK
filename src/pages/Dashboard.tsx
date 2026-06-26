@@ -106,8 +106,8 @@ export function Dashboard() {
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full my-6">
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col justify-between min-h-[120px]">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col justify-between">
           <p className="text-[#999] text-xs font-mono uppercase tracking-wide">Capital Alocado (Mês Atual)</p>
           <div>
             <p className="text-[#00FF66] text-2xl font-bold font-mono tracking-wider" style={{ filter: "drop-shadow(0 0 8px rgba(0,255,102,0.4))" }}>
@@ -119,7 +119,7 @@ export function Dashboard() {
             </p>
           </div>
         </div>
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col justify-between min-h-[120px]">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col justify-between">
           <p className="text-[#999] text-xs font-mono uppercase tracking-wide">Projeção de Retorno</p>
           <div>
             <p className="text-[#00FF66] text-2xl font-bold font-mono tracking-wider" style={{ filter: "drop-shadow(0 0 8px rgba(0,255,102,0.4))" }}>
@@ -131,7 +131,7 @@ export function Dashboard() {
             </p>
           </div>
         </div>
-        <div className="bg-[#ff3838]/5 border border-[#ff3838]/20 rounded-xl p-5 flex flex-col justify-between min-h-[120px]">
+        <div className="bg-[#ff3838]/5 border border-[#ff3838]/20 rounded-xl p-5 flex flex-col justify-between">
           <p className="text-[#999] text-xs font-mono uppercase tracking-wide">Índice de Inadimplência</p>
           <div>
             <div className="flex items-center gap-3">

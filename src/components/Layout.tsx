@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react"
-import { Outlet } from "react-router-dom"
-import { Sidebar } from "./Sidebar"
+import { Outlet, NavLink, useNavigate } from "react-router-dom"
 import { MatrixBg } from "./MatrixBg"
-import { MobileDrawer } from "./MobileDrawer"
 import { SystemLogs } from "./SystemLogs"
 import { useApp } from "../context/AppContext"
 
@@ -117,9 +115,20 @@ function PanicScreen() {
   )
 }
 
+const links = [
+  { to: "/", label: "Painel Geral", icon: "dashboard" },
+  { to: "/clientes", label: "Carteira de Clientes", icon: "group" },
+  { to: "/agenda", label: "Agenda de Recebimento", icon: "calendar_today" },
+  { to: "/fluxo", label: "Auditoria de Caixa", icon: "account_balance_wallet" },
+  { to: "/capital", label: "Gestão de Capital", icon: "account_balance" },
+  { to: "/config", label: "Configurações de Segurança", icon: "security" },
+  { to: "/admin", label: "Painel Admin", icon: "admin_panel_settings" },
+]
+
 export function Layout() {
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const { saldoBaixo, isCamouflaged, camuflagemSkin, toggleCamouflage, panicMode } = useApp()
+  const [isOpen, setIsOpen] = useState(false)
+  const { saldoBaixo, isCamouflaged, camuflagemSkin, toggleCamouflage, panicMode, tenantId, user, saldoDisponivel, logout } = useApp()
+  const navigate = useNavigate()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -132,8 +141,16 @@ export function Layout() {
     return () => window.removeEventListener("keydown", handler)
   }, [toggleCamouflage])
 
+  function handleLogout() {
+    logout()
+    navigate("/", { replace: true })
+  }
+
+  const isAdmin = user === "admin" && tenantId === "corebank"
+  const visibleLinks = isAdmin ? links : links.filter((l) => l.to !== "/admin")
+
   return (
-    <div className="flex flex-col w-full min-h-screen bg-black overflow-hidden">
+    <div className="flex flex-col md:flex-row w-full min-h-screen bg-black text-white overflow-y-auto md:overflow-hidden">
       {panicMode && <PanicScreen />}
 
       {!panicMode && isCamouflaged && (
@@ -147,21 +164,122 @@ export function Layout() {
       {!panicMode && !isCamouflaged && (
         <>
           {saldoBaixo && (
-            <div className="bg-[#FF3838]/10 border-b border-[#FF3838]/30 px-6 py-2 animate-pulse z-20 relative">
+            <div className="bg-[#FF3838]/10 border-b border-[#FF3838]/30 px-4 md:px-6 py-2 animate-pulse z-20 relative">
               <p className="text-xs text-[#FF3838] font-mono font-[600] flex items-center gap-2">
                 <span className="material-symbols-outlined text-sm">warning</span>
                 OPERAÇÃO EM RISCO: Saldo abaixo do limite de segurança. Injete mais capital imediatamente.
               </p>
             </div>
           )}
-          <div className="flex flex-row flex-1 overflow-hidden">
+
+          {/* Mobile top bar */}
+          <div className="md:hidden w-full h-14 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between px-4 sticky top-0 z-50 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setIsOpen(true)} className="material-symbols-outlined text-[#666] hover:text-[#e0e0e0] text-xl">
+                menu
+              </button>
+              <span className="material-symbols-outlined text-[#00e55b] text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                shield
+              </span>
+              <span className="text-[#e0e0e0] font-mono font-[700] text-sm truncate">{tenantId}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] text-[#666] font-mono text-right leading-tight">
+                DISPONÍVEL<br />
+                <span className={`text-xs font-[700] ${saldoBaixo ? "text-[#FF3838]" : "text-[#00e55b]"}`}>R$ {saldoDisponivel.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-1 min-h-0">
             <MatrixBg />
-            <Sidebar onMenuToggle={() => setDrawerOpen(true)} />
-            <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-            <main className="flex-1 min-w-0 h-screen overflow-y-auto p-6 space-y-6 relative z-10">
+
+            {/* Backdrop for mobile */}
+            {isOpen && (
+              <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsOpen(false)} />
+            )}
+
+            {/* Sidebar: mobile overlay / desktop static */}
+            <aside
+              className={`
+                fixed inset-y-0 left-0 z-50 w-64 bg-zinc-950 border-r border-zinc-900 p-4 flex flex-col
+                transform transition-transform duration-300 ease-out
+                md:relative md:translate-x-0 md:flex
+                ${isOpen ? "translate-x-0" : "-translate-x-full"}
+              `}
+            >
+              {/* Mobile header with close button */}
+              <div className="flex items-center justify-between mb-6 md:hidden">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[#00e55b] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    shield
+                  </span>
+                  <h1 className="font-[700] text-[#e0e0e0] text-lg tracking-tight font-mono">CORE-BANK</h1>
+                </div>
+                <button onClick={() => setIsOpen(false)} className="material-symbols-outlined text-[#666] hover:text-[#e0e0e0] transition-colors">
+                  close
+                </button>
+              </div>
+
+              {/* Desktop header */}
+              <div className="hidden md:flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[#00e55b] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    shield
+                  </span>
+                  <h1 className="font-[700] text-[#e0e0e0] text-lg tracking-tight font-mono">CORE-BANK</h1>
+                </div>
+              </div>
+
+              <p className="text-[#00e55b] text-xs font-mono mb-1">{user.toUpperCase()}</p>
+              <p className="text-[#666] text-[10px] font-mono mb-6">TENANT: {tenantId}</p>
+
+              <nav className="flex-1 space-y-[2px] overflow-y-auto">
+                {visibleLinks.map(({ to, label, icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === "/"}
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 font-mono text-sm rounded-md transition-all whitespace-nowrap ${
+                        isActive
+                          ? "text-[#00e55b] bg-[#00e55b]/10"
+                          : "text-[#666] hover:text-[#e0e0e0] hover:bg-zinc-800"
+                      }`
+                    }
+                  >
+                    <span className="material-symbols-outlined text-lg flex-shrink-0">{icon}</span>
+                    <span className="truncate">{label}</span>
+                  </NavLink>
+                ))}
+              </nav>
+
+              <div className="pt-6 border-t border-zinc-900">
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 font-mono text-sm rounded-md transition-all text-[#FF3838] hover:bg-[#FF3838]/10 mb-4"
+                >
+                  <span className="material-symbols-outlined text-lg flex-shrink-0">logout</span>
+                  <span className="truncate">Encerrar Sessão</span>
+                </button>
+                <div className="flex items-center gap-2 text-[#00e55b] text-xs font-mono vpn-pulse">
+                  <span className="material-symbols-outlined text-sm">vpn_lock</span>
+                  VPN: ACTIVE
+                </div>
+                <div className="mt-3 text-[10px] text-[#666] font-mono leading-relaxed">
+                  SYS_VER: 4.2.0-STABLE<br />
+                  LATENCY: 14ms
+                </div>
+              </div>
+            </aside>
+
+            {/* Main content */}
+            <main className="flex-1 w-full p-4 md:p-6 space-y-6 overflow-y-auto">
               <Outlet />
             </main>
           </div>
+
           <SystemLogs />
         </>
       )}
