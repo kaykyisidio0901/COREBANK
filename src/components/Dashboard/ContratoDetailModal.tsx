@@ -13,10 +13,6 @@ function formatValor(v: number) {
   return `R$ ${v.toFixed(2).replace(".", ",")}`
 }
 
-function extrairDigitosTelefone(telefone: string) {
-  return telefone.replace(/\D/g, "")
-}
-
 function formatarData(d: Date) {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
@@ -32,11 +28,12 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
   )
 
   if (!contratoId || !contrato) return null
+  const c = contrato
 
-  const parcelasPagas = contrato.parcelas.filter((p) => p.status === "Paga").length
-  const parcelasAtrasadas = contrato.parcelas.filter((p) => p.status === "Atrasada").length
-  const totalPago = contrato.parcelas.filter((p) => p.status === "Paga").reduce((s, p) => s + p.valor, 0)
-  const restante = contrato.valorTotal - totalPago
+  const parcelasPagas = c.parcelas.filter((p) => p.status === "Paga").length
+  const parcelasAtrasadas = c.parcelas.filter((p) => p.status === "Atrasada").length
+  const totalPago = c.parcelas.filter((p) => p.status === "Paga").reduce((s, p) => s + p.valor, 0)
+  const restante = c.valorTotal - totalPago
 
   function gerarPDF() {
     const doc = new jsPDF({ unit: "mm", format: "a4" })
@@ -70,13 +67,13 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
 
     writeLine(`EMISSOR/CREDOR: CORE-BANK OPERAÇÕES PRIVADAS`)
     y += 3
-    writeLine(`DEVEDOR: ${contrato.nome}, inscrito no CPF sob o n° ${contrato.cpf || "_________________________"}, telefone ${contrato.telefone || "_________________________"}.`)
+    writeLine(`DEVEDOR: ${c.nome}, inscrito no CPF sob o n° ${c.cpf || "_________________________"}, telefone ${c.telefone || "_________________________"}.`)
     y += 3
-    writeLine(`VALOR PRINCIPAL: ${formatValor(contrato.valorPrincipal)} | TAXA DE JUROS: ${contrato.taxa}% ao período.`)
+    writeLine(`VALOR PRINCIPAL: ${formatValor(c.valorPrincipal)} | TAXA DE JUROS: ${c.taxa}% ao período.`)
     y += 3
-    writeLine(`VALOR TOTAL REPACTUADO A RECEBER: ${formatValor(contrato.valorTotal)}.`)
+    writeLine(`VALOR TOTAL REPACTUADO A RECEBER: ${formatValor(c.valorTotal)}.`)
     y += 3
-    writeLine(`PARCELAMENTO: ${contrato.numParcelas}x de ${formatValor(contrato.valorTotal / contrato.numParcelas)} — Intervalo ${contrato.intervalo === "mensal" ? "Mensal" : contrato.intervalo === "quinzenal" ? "Quinzenal" : "Semanal"}.`)
+    writeLine(`PARCELAMENTO: ${c.numParcelas}x de ${formatValor(c.valorTotal / c.numParcelas)} — Intervalo ${c.intervalo === "mensal" ? "Mensal" : c.intervalo === "quinzenal" ? "Quinzenal" : "Semanal"}.`)
     y += 3
     doc.setFont("helvetica", "bold")
     doc.setFontSize(9)
@@ -84,7 +81,7 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
     y += 5
     doc.setFont("helvetica", "normal")
     doc.setFontSize(8.5)
-    contrato.parcelas.forEach((p) => {
+    c.parcelas.forEach((p) => {
       const statusChar = p.status === "Paga" ? "[PAGA] " : p.status === "Atrasada" ? "[ATRASADA] " : "[PENDENTE] "
       doc.text(`  ${statusChar}Parcela ${p.numero}ª — ${formatValor(p.valor)} — Vencimento: ${p.vencimento}`, margin, y)
       y += 4.5
@@ -109,14 +106,14 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
 
     doc.setFontSize(8)
     doc.setTextColor(150, 150, 150)
-    doc.text(`Documento gerado em ${formatarData(new Date())} — Contrato: ${contrato.id} — Hash: ${contrato.hash}`, margin, 287)
+    doc.text(`Documento gerado em ${formatarData(new Date())} — Contrato: ${c.id} — Hash: ${c.hash}`, margin, 287)
 
-    doc.save(`termo_mutuo_${contrato.id}.pdf`)
+    doc.save(`termo_mutuo_${c.id}.pdf`)
   }
 
   function handleDelete() {
     setDeleting(true)
-    deleteContrato(tenantId, contrato.id)
+    deleteContrato(tenantId, c.id)
       .then(() => {
         onDeleted?.()
         onClose()
@@ -124,7 +121,7 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
       .catch(() => setDeleting(false))
   }
 
-  const parcelas = contrato.parcelas
+  const parcelas = c.parcelas
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -136,7 +133,7 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
         <div className="sticky top-0 bg-zinc-950 border-b border-zinc-800 p-5 flex items-center justify-between">
           <div>
             <h3 className="text-sm text-[#e0e0e0] font-mono font-[600]">Detalhes do Contrato</h3>
-            <p className="text-[10px] text-[#666] font-mono mt-0.5">ID: {contrato.id}</p>
+            <p className="text-[10px] text-[#666] font-mono mt-0.5">ID: {c.id}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -181,25 +178,25 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-black/40 border border-zinc-800 rounded-lg p-3">
               <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider">Principal</p>
-              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{formatValor(contrato.valorPrincipal)}</p>
+              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{formatValor(c.valorPrincipal)}</p>
             </div>
             <div className="bg-black/40 border border-zinc-800 rounded-lg p-3">
               <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider">Total c/ Juros</p>
-              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{formatValor(contrato.valorTotal)}</p>
+              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{formatValor(c.valorTotal)}</p>
             </div>
             <div className="bg-black/40 border border-zinc-800 rounded-lg p-3">
-              <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider">Juros ({contrato.tipoJuros})</p>
-              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{contrato.taxa}%</p>
+              <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider">Juros ({c.tipoJuros})</p>
+              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{c.taxa}%</p>
             </div>
             <div className="bg-black/40 border border-zinc-800 rounded-lg p-3">
               <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider">Parcelas</p>
-              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{contrato.numParcelas}x {contrato.intervalo === "mensal" ? "mensais" : contrato.intervalo === "quinzenal" ? "quinzenais" : "semanais"}</p>
+              <p className="text-sm text-[#e0e0e0] font-mono font-[600] mt-1">{c.numParcelas}x {c.intervalo === "mensal" ? "mensais" : c.intervalo === "quinzenal" ? "quinzenais" : "semanais"}</p>
             </div>
           </div>
 
           {/* Status */}
           <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span className="text-[#666]">Pagas: <span className="text-[#00e55b]">{parcelasPagas}/{contrato.parcelas.length}</span></span>
+            <span className="text-[#666]">Pagas: <span className="text-[#00e55b]">{parcelasPagas}/{c.parcelas.length}</span></span>
             <span className="text-[#666]">Atrasadas: <span className="text-[#FF3838]">{parcelasAtrasadas}</span></span>
             <span className="text-[#666]">Total pago: <span className="text-[#00e55b]">{formatValor(totalPago)}</span></span>
             <span className="text-[#666]">Restante: <span className="text-[#e0e0e0]">{formatValor(restante)}</span></span>
@@ -209,10 +206,10 @@ export function ContratoDetailModal({ contratoId, onClose, onDeleted }: Props) {
           <div className="bg-black/40 border border-zinc-800 rounded-lg p-4">
             <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-2">Dados do Cliente</p>
             <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div><span className="text-[#666]">Nome: </span><span className="text-[#e0e0e0]">{contrato.nome}</span></div>
-              {contrato.cpf && <div><span className="text-[#666]">CPF: </span><span className="text-[#e0e0e0]">{contrato.cpf}</span></div>}
-              {contrato.telefone && <div><span className="text-[#666]">Tel: </span><span className="text-[#e0e0e0]">{contrato.telefone}</span></div>}
-              <div><span className="text-[#666]">Criado em: </span><span className="text-[#e0e0e0]">{contrato.dataCriacao}</span></div>
+              <div><span className="text-[#666]">Nome: </span><span className="text-[#e0e0e0]">{c.nome}</span></div>
+              {c.cpf && <div><span className="text-[#666]">CPF: </span><span className="text-[#e0e0e0]">{c.cpf}</span></div>}
+              {c.telefone && <div><span className="text-[#666]">Tel: </span><span className="text-[#e0e0e0]">{c.telefone}</span></div>}
+              <div><span className="text-[#666]">Criado em: </span><span className="text-[#e0e0e0]">{c.dataCriacao}</span></div>
             </div>
           </div>
 

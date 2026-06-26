@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { CadastroCliente, type DadosCliente } from "../components/Dashboard/CadastroCliente"
 import { useApp } from "../context/AppContext"
-import { updateCliente } from "../api/client"
 
 function downloadBase64(base64: string, filename: string) {
   const link = document.createElement("a")
