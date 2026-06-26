@@ -1,9 +1,14 @@
 import { useState } from "react"
+import { Navigate } from "react-router-dom"
 import { useApp } from "../context/AppContext"
 import type { TenantAdmin } from "../types"
 
 export default function PainelAdmin() {
-  const { tenantsCadastrados, adicionarTenant, toggleTenantStatus } = useApp()
+  const { tenantsCadastrados, adicionarTenant, toggleTenantStatus, user, tenantId } = useApp()
+
+  if (user !== "admin" || tenantId !== "corebank") {
+    return <Navigate to="/" replace />
+  }
   const [modalOpen, setModalOpen] = useState(false)
   const [tid, setTid] = useState("")
   const [operator, setOperator] = useState("")
