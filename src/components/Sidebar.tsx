@@ -17,6 +17,9 @@ export function Sidebar({ onMenuToggle }: { onMenuToggle: () => void }) {
   const { saldoDisponivel, saldoBaixo, tenantId, user, logout } = useApp()
   const navigate = useNavigate()
 
+  const isAdmin = user === "admin" && tenantId === "corebank"
+  const visibleLinks = isAdmin ? links : links.filter((l) => l.to !== "/admin")
+
   function handleLogout() {
     logout()
     navigate("/", { replace: true })
@@ -86,7 +89,7 @@ export function Sidebar({ onMenuToggle }: { onMenuToggle: () => void }) {
             <p className="text-[#666] text-[10px] font-mono mb-6">TENANT: {tenantId}</p>
 
             <nav className="flex-1 space-y-[2px]">
-              {links.map(({ to, label, icon }) => (
+              {visibleLinks.map(({ to, label, icon }) => (
                 <NavLink
                   key={to}
                   to={to}
