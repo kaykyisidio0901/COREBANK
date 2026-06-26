@@ -1,10 +1,18 @@
 import express from "express"
 import cors from "cors"
+import path from "path"
+import { fileURLToPath } from "url"
 import bcrypt from "bcryptjs"
 import db from "./database.js"
 
 const app = express()
-const PORT = 3001
+const PORT = process.env.PORT || 3001
+
+// Serve built frontend in production
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../dist")))
+}
 
 app.use(cors())
 app.use(express.json({ limit: "10mb" }))
@@ -312,6 +320,13 @@ app.post("/api/panic", requireTenant, (req, res) => {
   tx()
   res.json({ success: true, message: "Todos os dados do tenant foram removidos." })
 })
+
+// SPA fallback — serve index.html for all non-API routes in production
+if (process.env.NODE_ENV === "production") {
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../dist/index.html"))
+  })
+}
 
 // ─── START ─────────────────────────────────────────────────────────────
 // Ensure estado_tenant table exists

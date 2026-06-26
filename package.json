@@ -8,6 +8,7 @@
     "client": "vite",
     "server": "tsx server/index.js",
     "build": "tsc -b && vite build",
+    "start": "node server/index.js",
     "lint": "oxlint",
     "preview": "vite preview"
   },
