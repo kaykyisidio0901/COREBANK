@@ -150,7 +150,7 @@ export function Layout() {
   const visibleLinks = isAdmin ? links : links.filter((l) => l.to !== "/admin")
 
   return (
-    <div className="flex flex-col md:flex-row w-full min-h-screen bg-black text-white overflow-y-auto md:overflow-hidden">
+    <div className="flex flex-col w-full min-h-screen bg-black text-white overflow-x-hidden">
       {panicMode && <PanicScreen />}
 
       {!panicMode && isCamouflaged && (
@@ -164,7 +164,7 @@ export function Layout() {
       {!panicMode && !isCamouflaged && (
         <>
           {saldoBaixo && (
-            <div className="bg-[#FF3838]/10 border-b border-[#FF3838]/30 px-4 md:px-6 py-2 animate-pulse z-20 relative">
+            <div className="w-full bg-[#FF3838]/10 border-b border-[#FF3838]/30 px-4 md:px-6 py-2 animate-pulse z-20 relative">
               <p className="text-xs text-[#FF3838] font-mono font-[600] flex items-center gap-2">
                 <span className="material-symbols-outlined text-sm">warning</span>
                 OPERAÇÃO EM RISCO: Saldo abaixo do limite de segurança. Injete mais capital imediatamente.
@@ -191,7 +191,8 @@ export function Layout() {
             </div>
           </div>
 
-          <div className="flex flex-1 min-h-0">
+          {/* Content area: sidebar + main */}
+          <div className="flex flex-1 min-h-0 flex-col md:flex-row">
             <MatrixBg />
 
             {/* Backdrop for mobile */}
@@ -199,61 +200,64 @@ export function Layout() {
               <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsOpen(false)} />
             )}
 
-            {/* Sidebar: mobile overlay / desktop static */}
+            {/* Sidebar — mobile overlay / desktop static left */}
             <aside
               className={`
-                fixed inset-y-0 left-0 z-50 w-64 bg-zinc-950 border-r border-zinc-900 p-4 flex flex-col
+                fixed inset-y-0 left-0 z-50 flex flex-col justify-between
+                w-64 min-w-[260px] bg-zinc-950 border-r border-zinc-900 p-5
                 transform transition-transform duration-300 ease-out
-                md:relative md:translate-x-0 md:flex
+                md:sticky md:translate-x-0 md:flex md:h-screen
                 ${isOpen ? "translate-x-0" : "-translate-x-full"}
               `}
             >
-              {/* Mobile header with close button */}
-              <div className="flex items-center justify-between mb-6 md:hidden">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-[#00e55b] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    shield
-                  </span>
-                  <h1 className="font-[700] text-[#e0e0e0] text-lg tracking-tight font-mono">CORE-BANK</h1>
+              <div>
+                {/* Mobile close button */}
+                <div className="flex items-center justify-between mb-6 md:hidden">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[#00e55b] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      shield
+                    </span>
+                    <h1 className="font-[700] text-[#e0e0e0] text-lg tracking-tight font-mono">CORE-BANK</h1>
+                  </div>
+                  <button onClick={() => setIsOpen(false)} className="material-symbols-outlined text-[#666] hover:text-[#e0e0e0] transition-colors">
+                    close
+                  </button>
                 </div>
-                <button onClick={() => setIsOpen(false)} className="material-symbols-outlined text-[#666] hover:text-[#e0e0e0] transition-colors">
-                  close
-                </button>
-              </div>
 
-              {/* Desktop header */}
-              <div className="hidden md:flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-[#00e55b] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    shield
-                  </span>
-                  <h1 className="font-[700] text-[#e0e0e0] text-lg tracking-tight font-mono">CORE-BANK</h1>
+                {/* Desktop header */}
+                <div className="hidden md:flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[#00e55b] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      shield
+                    </span>
+                    <h1 className="font-[700] text-[#e0e0e0] text-lg tracking-tight font-mono">CORE-BANK</h1>
+                  </div>
                 </div>
+
+                <p className="text-[#00e55b] text-xs font-mono mb-1">{user.toUpperCase()}</p>
+                <p className="text-[#666] text-[10px] font-mono mb-6">TENANT: {tenantId}</p>
+
+                <nav className="space-y-[2px]">
+                  {visibleLinks.map(({ to, label, icon }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={to === "/"}
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 font-mono text-sm rounded-md transition-all whitespace-nowrap ${
+                          isActive
+                            ? "text-[#00e55b] bg-[#00e55b]/10"
+                            : "text-[#666] hover:text-[#e0e0e0] hover:bg-zinc-800"
+                        }`
+                      }
+                    >
+                      <span className="material-symbols-outlined text-lg flex-shrink-0">{icon}</span>
+                      <span className="truncate">{label}</span>
+                    </NavLink>
+                  ))}
+                </nav>
               </div>
-
-              <p className="text-[#00e55b] text-xs font-mono mb-1">{user.toUpperCase()}</p>
-              <p className="text-[#666] text-[10px] font-mono mb-6">TENANT: {tenantId}</p>
-
-              <nav className="flex-1 space-y-[2px] overflow-y-auto">
-                {visibleLinks.map(({ to, label, icon }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    end={to === "/"}
-                    onClick={() => setIsOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 font-mono text-sm rounded-md transition-all whitespace-nowrap ${
-                        isActive
-                          ? "text-[#00e55b] bg-[#00e55b]/10"
-                          : "text-[#666] hover:text-[#e0e0e0] hover:bg-zinc-800"
-                      }`
-                    }
-                  >
-                    <span className="material-symbols-outlined text-lg flex-shrink-0">{icon}</span>
-                    <span className="truncate">{label}</span>
-                  </NavLink>
-                ))}
-              </nav>
 
               <div className="pt-6 border-t border-zinc-900">
                 <button
@@ -275,7 +279,7 @@ export function Layout() {
             </aside>
 
             {/* Main content */}
-            <main className="flex-1 w-full p-4 md:p-6 space-y-6 overflow-y-auto">
+            <main className="flex-1 min-w-0 w-full p-4 md:p-6 space-y-6 overflow-y-auto">
               <Outlet />
             </main>
           </div>

@@ -106,7 +106,7 @@ export function Dashboard() {
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 flex flex-col justify-between">
           <p className="text-[#999] text-xs font-mono uppercase tracking-wide">Capital Alocado (Mês Atual)</p>
           <div>
