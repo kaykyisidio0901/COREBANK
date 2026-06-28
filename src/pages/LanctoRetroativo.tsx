@@ -24,6 +24,8 @@ export function LanctoRetroativo() {
   const [telefone, setTelefone] = useState("")
 
   const [valor, setValor] = useState("")
+  const [taxa, setTaxa] = useState("")
+  const [tipoPrazo, setTipoPrazo] = useState<"30" | "personalizado">("30")
   const [dataInicio, setDataInicio] = useState("")
   const [dataVencimento, setDataVencimento] = useState("")
 
@@ -38,6 +40,10 @@ export function LanctoRetroativo() {
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState("")
   const [sucesso, setSucesso] = useState("")
+
+  const valorNum = Number(valor.replace(/[^0-9.,]/g, "").replace(",", ".")) || 0
+  const taxaNum = Number(taxa.replace(",", ".")) || 0
+  const valorTotalCalculado = taxaNum > 0 ? valorNum + (valorNum * taxaNum / 100) : valorNum
 
   function handleBuscar() {
     const termo = busca.trim().toLowerCase()
@@ -87,11 +93,19 @@ export function LanctoRetroativo() {
     })
   }
 
+  function calcularDataVencimento(): string {
+    if (tipoPrazo === "personalizado" && dataVencimento) {
+      return dataVencimento
+    }
+    const inicio = new Date(dataInicio + "T12:00:00")
+    inicio.setDate(inicio.getDate() + 30)
+    return inicio.toISOString().split("T")[0]
+  }
+
   async function handleSalvar() {
     setErro("")
     setSucesso("")
 
-    const valorNum = Number(valor.replace(/[^0-9.,]/g, "").replace(",", "."))
     if (!valorNum || valorNum <= 0) {
       setErro("Informe um valor válido.")
       return
@@ -100,11 +114,11 @@ export function LanctoRetroativo() {
       setErro("Selecione a data de início do contrato.")
       return
     }
-    if (!dataVencimento) {
+    if (tipoPrazo === "personalizado" && !dataVencimento) {
       setErro("Selecione a data de vencimento.")
       return
     }
-    if (dataVencimento < dataInicio) {
+    if (tipoPrazo === "personalizado" && dataVencimento < dataInicio) {
       setErro("A data de vencimento não pode ser anterior à data de início.")
       return
     }
@@ -157,10 +171,11 @@ export function LanctoRetroativo() {
         atualizarClienteLocal(clienteId, { comprovanteBase64: comprovantePreview })
       }
 
-      const dueDate = new Date(dataVencimento + "T12:00:00")
+      const dueDateStr = calcularDataVencimento()
+      const dueDate = new Date(dueDateStr + "T12:00:00")
       const parcela: ParcelaContrato = {
         numero: 1,
-        valor: valorNum,
+        valor: valorTotalCalculado,
         vencimento: formatarData(dueDate),
         status: "Aguardando",
       }
@@ -171,8 +186,8 @@ export function LanctoRetroativo() {
         cpf: cpfLimpo,
         telefone: telefone.replace(/\D/g, ""),
         valorPrincipal: valorNum,
-        valorTotal: valorNum,
-        taxa: 0,
+        valorTotal: valorTotalCalculado,
+        taxa: taxaNum,
         tipoJuros: "simples",
         numParcelas: 1,
         intervalo: "mensal",
@@ -309,27 +324,75 @@ export function LanctoRetroativo() {
       <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-5 space-y-4">
         <h3 className="text-xs text-[#e0e0e0] font-mono font-[600] uppercase tracking-wide">Dados do Empréstimo</h3>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] text-[#666] font-mono mb-1">Valor Concedido (R$)</label>
+            <input
+              type="text"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="1.500,00"
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-[#e0e0e0] placeholder:text-[#555] outline-none focus:border-zinc-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-[#666] font-mono mb-1">Juros (%)</label>
+            <input
+              type="text"
+              value={taxa}
+              onChange={(e) => setTaxa(e.target.value)}
+              placeholder="10"
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-[#e0e0e0] placeholder:text-[#555] outline-none focus:border-zinc-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        {taxaNum > 0 && (
+          <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800 text-xs font-mono text-[#999]">
+            Valor Total: <span className="text-[#00e55b] font-[600]">R$ {valorTotalCalculado.toFixed(2)}</span>
+            {" — "}Principal: R$ {valorNum.toFixed(2)} + Juros: R$ {(valorNum * taxaNum / 100).toFixed(2)}
+          </div>
+        )}
+
         <div>
-          <label className="block text-[10px] text-[#666] font-mono mb-1">Valor Concedido (R$)</label>
+          <label className="block text-[10px] text-[#666] font-mono mb-1">Data de Início (Retroativa)</label>
           <input
-            type="text"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            placeholder="1.500,00"
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-[#e0e0e0] placeholder:text-[#555] outline-none focus:border-zinc-500 transition-colors"
+            type="date"
+            value={dataInicio}
+            onChange={(e) => setDataInicio(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-[#e0e0e0] outline-none focus:border-zinc-500 transition-colors"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-[10px] text-[#666] font-mono mb-1">Data de Início (Retroativa)</label>
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-[#e0e0e0] outline-none focus:border-zinc-500 transition-colors"
-            />
+        <div>
+          <label className="block text-[10px] text-[#666] font-mono mb-1">Prazo</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setTipoPrazo("30"); setDataVencimento("") }}
+              className={`flex-1 px-4 py-2 text-xs font-mono font-[600] rounded-lg border transition-colors ${
+                tipoPrazo === "30"
+                  ? "border-[#00e55b]/40 text-[#00e55b] bg-[#00e55b]/5"
+                  : "border-zinc-700 text-[#666] hover:border-zinc-600"
+              }`}
+            >
+              30 DIAS
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipoPrazo("personalizado")}
+              className={`flex-1 px-4 py-2 text-xs font-mono font-[600] rounded-lg border transition-colors ${
+                tipoPrazo === "personalizado"
+                  ? "border-[#00e55b]/40 text-[#00e55b] bg-[#00e55b]/5"
+                  : "border-zinc-700 text-[#666] hover:border-zinc-600"
+              }`}
+            >
+              AVULSO
+            </button>
           </div>
+        </div>
+
+        {tipoPrazo === "personalizado" && (
           <div>
             <label className="block text-[10px] text-[#666] font-mono mb-1">Data de Vencimento</label>
             <input
@@ -339,7 +402,7 @@ export function LanctoRetroativo() {
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-[#e0e0e0] outline-none focus:border-zinc-500 transition-colors"
             />
           </div>
-        </div>
+        )}
       </div>
 
       {/* Document upload */}
