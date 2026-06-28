@@ -45,6 +45,8 @@ interface AppContextType {
     numParcelas: number
     intervalo: "mensal" | "quinzenal" | "semanal"
     parcelas: ParcelaContrato[]
+    dataInicio?: string
+    parcelasPagas?: number
   }) => Contrato
   registrarPagamento: (clienteNome: string, valor: number, contratoId: string) => void
   isCamouflaged: boolean
@@ -268,7 +270,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const login = async (tenant: string, usuario: string) => {
-    // Save current tenant data before switching
     saveTenantDataToStorage(tenantId)
 
     setTenantId(tenant)
@@ -277,24 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("corebank_tenant", tenant)
     localStorage.setItem("corebank_user", usuario)
 
-    // Try loading from server first
-    try {
-      const [clientesData, contratosData, transacoesData, caixaData] = await Promise.all([
-        api.fetchClientes(tenant),
-        api.fetchContratos(tenant),
-        api.fetchTransacoes(tenant),
-        api.fetchCaixa(tenant),
-      ])
-      setClientes(clientesData)
-      setContratos(contratosData)
-      setTransacoes(transacoesData)
-      setSaldoDisponivel(caixaData.saldoDisponivel ?? 0)
-      return
-    } catch {
-      // Server offline — fall back to localStorage
-    }
-
-    // Fallback: load from localStorage
+    // Load from localStorage first (works offline, survives server restart)
     const saved = localStorage.getItem(`corebank_data_${tenant}`)
     if (saved) {
       try {
@@ -307,19 +291,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTransacoes(d.transacoes ?? [])
         setIsCamouflaged(d.isCamouflaged ?? false)
         setCamuflagemSkin(d.camuflagemSkin ?? "Planilha de Excel Corporativa")
-        return
-      } catch { /* corrupted data, fall through to defaults */ }
+      } catch { /* corrupted */ }
     }
-    // First access for this tenant — start clean
-    setSaldoDisponivel(0)
-    setCapitalMinimo(5000)
-    setTetoRisco(5000)
-    setClientes([])
-    setContratos([])
-    setTransacoes([])
-    setIsCamouflaged(false)
-    setCamuflagemSkin("Planilha de Excel Corporativa")
-    setPanicMode(false)
+
+    // Sync to server in background — if server has data, use it; if empty, upload local data
+    try {
+      const [clientesData, contratosData, transacoesData, caixaData] = await Promise.all([
+        api.fetchClientes(tenant),
+        api.fetchContratos(tenant),
+        api.fetchTransacoes(tenant),
+        api.fetchCaixa(tenant),
+      ])
+      if (Array.isArray(clientesData) && clientesData.length > 0) {
+        // Server has data — use it (more recent)
+        setClientes(clientesData)
+        setContratos(contratosData)
+        setTransacoes(transacoesData)
+        setSaldoDisponivel(caixaData.saldoDisponivel ?? 0)
+      } else if (saved) {
+        // Server empty but we have local data — upload it
+        const d = JSON.parse(saved)
+        await Promise.all([
+          ...(d.clientes ?? []).map((c: Cliente) => api.createCliente(tenant, c as unknown as Record<string, unknown>).catch(() => {})),
+          ...(d.contratos ?? []).map((c: Contrato) => api.createContrato(tenant, c as unknown as Record<string, unknown>).catch(() => {})),
+          (d.saldoDisponivel ?? 0) > 0
+            ? api.aporteCapital(tenant, d.saldoDisponivel, "sync").catch(() => {})
+            : Promise.resolve(),
+        ])
+      }
+    } catch {
+      // Server offline — keep local data
+    }
   }
 
   const logout = () => {
@@ -433,6 +435,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     numParcelas: number
     intervalo: "mensal" | "quinzenal" | "semanal"
     parcelas: ParcelaContrato[]
+    dataInicio?: string
+    parcelasPagas?: number
   }): Contrato => {
     const hex = "0123456789abcdef"
     let hash = "CTR-"
@@ -440,6 +444,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const now = new Date()
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`
+
+    const dataCriacao = params.dataInicio
+      ? new Date(params.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")
+      : now.toLocaleDateString("pt-BR")
+
+    const valorParcela = params.numParcelas > 0 ? params.valorTotal / params.numParcelas : 0
+    const valorPrePago = (params.parcelasPagas || 0) * valorParcela
+    const devedorReal = params.valorTotal - valorPrePago
 
     const contrato: Contrato = {
       id: hash,
@@ -454,21 +466,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       numParcelas: params.numParcelas,
       intervalo: params.intervalo,
       parcelas: params.parcelas,
-      dataCriacao: now.toLocaleDateString("pt-BR"),
+      dataCriacao,
       hash: `#${hex.slice(0, 12)}`,
     }
 
     setContratos((prev) => [...prev, contrato])
 
-    // Update client: add devedor, alocado, score history
+    // Update client: add devedor (adjusted for prepaid), alocado, score history
     setClientes((prev) =>
       prev.map((c) => {
         if (c.id !== params.clienteId) return c
         return {
           ...c,
           alocado: c.alocado + params.valorPrincipal,
-          devedor: c.devedor + params.valorTotal,
-          ultimoPgto: "Pendente",
+          devedor: c.devedor + devedorReal,
+          ultimoPgto: params.parcelasPagas && params.parcelasPagas > 0 ? now.toLocaleDateString("pt-BR") : "Pendente",
           historicoScore: [
             ...c.historicoScore,
             { data: now.toLocaleDateString("pt-BR"), descricao: `Novo contrato ${hash} — R$ ${params.valorPrincipal.toFixed(2)} liberado`, pontos: 200 },

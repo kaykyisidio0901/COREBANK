@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo } from "react"
 import { Upload } from "lucide-react"
 import { jsPDF } from "jspdf"
-import { CadastroCliente, type DadosCliente } from "./CadastroCliente"
+
 import { useApp } from "../../context/AppContext"
 
 interface NovoEmprestimoModalProps {
@@ -23,10 +23,6 @@ function mascararTelefone(valor: string) {
   if (digits.length <= 2) return digits.length ? `(${digits}` : ""
   if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
-}
-
-function extrairDigitosTelefone(telefone: string) {
-  return telefone.replace(/\D/g, "")
 }
 
 function gerarHash() {
@@ -63,6 +59,8 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
   const [telefone, setTelefone] = useState("")
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [arquivoPreview, setArquivoPreview] = useState("")
+  const [arquivoComprovante, setArquivoComprovante] = useState<File | null>(null)
+  const [arquivoComprovantePreview, setArquivoComprovantePreview] = useState("")
   const [valorRaw, setValorRaw] = useState("")
   const [taxa, setTaxa] = useState("20")
   const [tipoJuros, setTipoJuros] = useState<TipoJuros>("simples")
@@ -73,14 +71,17 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
   const [jurosMora, setJurosMora] = useState("2")
   const [multaDiaria, setMultaDiaria] = useState("1")
   const [diasSimulados, setDiasSimulados] = useState("")
-  const [step, setStep] = useState<"busca" | "cadastro" | "contrato">("busca")
+  const [dataInicio, setDataInicio] = useState("")
+  const [parcelasPagas, setParcelasPagas] = useState(0)
   const [buscaInput, setBuscaInput] = useState("")
   const [clienteEncontrado, setClienteEncontrado] = useState<boolean | null>(null)
+  const [clienteBloqueado, setClienteBloqueado] = useState(false)
   const [clienteId, setClienteId] = useState("")
 
   const { clientes, adicionarCliente, adicionarContrato } = useApp()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputComprovanteRef = useRef<HTMLInputElement>(null)
 
   const handleBuscar = () => {
     const q = buscaInput.toLowerCase().replace(/\D/g, "")
@@ -90,30 +91,32 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
     )
     if (match) {
       setClienteEncontrado(true)
+      setClienteBloqueado(true)
       setClienteId(match.id)
       setNome(match.nome)
       setCpf(match.cpf)
       setEndereco(match.endereco)
       setTelefone(match.telefone)
-      setStep("contrato")
     } else {
       setClienteEncontrado(false)
+      setClienteBloqueado(false)
+      setClienteId("")
     }
   }
 
-  const iniciarCadastro = () => {
-    setStep("cadastro")
-    setClienteEncontrado(null)
-  }
-
-  const preencherDeCadastro = (dados: DadosCliente) => {
-    const novoCliente = adicionarCliente(dados)
+  const handleRegistrarNovo = () => {
+    if (!nome.trim() || cpf.replace(/\D/g, "").length < 11) return
+    const novoCliente = adicionarCliente({
+      nome, cpf, fep: "",
+      enderecoPrincipal: endereco,
+      enderecoSecundario: "",
+      telefone1: telefone, telefone2: "", telefone3: "",
+      rgFile: null, rgPreview: "",
+      comprovanteFile: null, comprovantePreview: "",
+    })
     setClienteId(novoCliente.id)
-    setNome(dados.nome)
-    setCpf(dados.cpf)
-    setEndereco(dados.enderecoPrincipal)
-    setTelefone(dados.telefone1)
-    setStep("contrato")
+    setClienteBloqueado(true)
+    setClienteEncontrado(true)
   }
 
   const valorNumerico = parseFloat(valorRaw.replace(/\./g, "").replace(",", ".")) || 0
@@ -121,6 +124,7 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
   const prazoFinal = prazo === 0 ? (parseInt(prazoCustom, 10) || 0) : prazo
   const intervaloDias = intervaloParcelas === "mensal" ? 30 : intervaloParcelas === "quinzenal" ? 15 : 7
   const prazoEfetivo = numParcelas > 1 ? numParcelas * intervaloDias : prazoFinal
+  const dataBase = dataInicio ? new Date(dataInicio + "T12:00:00") : new Date()
 
   const calcularJuros = useCallback(() => {
     if (valorNumerico <= 0 || taxaNumerica <= 0 || prazoEfetivo <= 0) return { juros: 0, total: 0 }
@@ -136,21 +140,23 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
   }, [valorNumerico, taxaNumerica, prazoEfetivo, tipoJuros])
 
   const { juros, total } = calcularJuros()
-  const dataVencimento = prazoEfetivo > 0 ? formatarData(somarDias(new Date(), prazoEfetivo)) : "—"
+  const dataVencimento = prazoEfetivo > 0 ? formatarData(somarDias(dataBase, prazoEfetivo)) : "—"
 
   const parcelasPreview = useMemo(() => {
     if (numParcelas <= 0 || total <= 0) return []
     const valorParcela = total / numParcelas
+    const baseDate = dataInicio ? new Date(dataInicio + "T12:00:00") : new Date()
     const hoje = new Date()
     const moraDecimal = (parseFloat(jurosMora) || 0) / 100
     const multa = parseFloat(multaDiaria) || 0
     return Array.from({ length: numParcelas }, (_, i) => {
       const dias = (i + 1) * intervaloDias
-      const data = somarDias(new Date(), dias)
+      const data = somarDias(new Date(baseDate), dias)
       const isAtrasada = data < hoje
+      const isPrePaga = i < parcelasPagas
       let valorFinal = valorParcela
-      let status: string = "Aguardando"
-      if (isAtrasada) {
+      let status: string = isPrePaga ? "Paga" : "Aguardando"
+      if (isAtrasada && !isPrePaga) {
         const diasAtraso = Math.floor((hoje.getTime() - data.getTime()) / (1000 * 60 * 60 * 24))
         const jurosMoraValor = valorParcela * moraDecimal * (diasAtraso / 30)
         const multaValor = multa * diasAtraso
@@ -159,7 +165,7 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
       }
       return { numero: i + 1, valor: valorFinal, vencimentoStr: formatarData(data), status }
     })
-  }, [numParcelas, intervaloDias, total, jurosMora, multaDiaria])
+  }, [numParcelas, intervaloDias, total, jurosMora, multaDiaria, dataInicio, parcelasPagas])
 
   const linhasParcelas = numParcelas > 1 ? parcelasPreview : []
 
@@ -191,19 +197,30 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
     setValorRaw(num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
 
-  const handleFileSelect = (file: File | null) => {
+  const handleFileSelect = (file: File | null, tipo: "rg" | "comprovante" = "rg") => {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) return
-    setArquivo(file)
-    const reader = new FileReader()
-    reader.onload = () => setArquivoPreview(reader.result as string)
-    reader.readAsDataURL(file)
+    if (tipo === "rg") {
+      setArquivo(file)
+      const reader = new FileReader()
+      reader.onload = () => setArquivoPreview(reader.result as string)
+      reader.readAsDataURL(file)
+    } else {
+      setArquivoComprovante(file)
+      const reader = new FileReader()
+      reader.onload = () => setArquivoComprovantePreview(reader.result as string)
+      reader.readAsDataURL(file)
+    }
   }
 
-  const removerArquivo = () => {
-    setArquivo(null)
-    setArquivoPreview("")
-    if (fileInputRef.current) fileInputRef.current.value = ""
+  const removerArquivo = (tipo: "rg" | "comprovante" = "rg") => {
+    if (tipo === "rg") {
+      setArquivo(null)
+      setArquivoPreview("")
+    } else {
+      setArquivoComprovante(null)
+      setArquivoComprovantePreview("")
+    }
   }
 
   const handleGerar = async () => {
@@ -213,14 +230,33 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
     const now = new Date()
     const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`
 
+    // Auto-register client if still a new registration
+    let contratoClienteId = clienteId
+    if (!contratoClienteId && nome.trim()) {
+      const novo = adicionarCliente({
+        nome, cpf, fep: "",
+        enderecoPrincipal: endereco,
+        enderecoSecundario: "",
+        telefone1: telefone, telefone2: "", telefone3: "",
+        rgFile: null, rgPreview: "",
+        comprovanteFile: null, comprovantePreview: "",
+      })
+      contratoClienteId = novo.id
+    }
+
     // 0. Create contract in context
-    if (clienteId) {
+    if (contratoClienteId) {
       const parcelasContrato = parcelasPreview.length > 0
-        ? parcelasPreview.map((p) => ({ numero: p.numero, valor: p.valor, vencimento: p.vencimentoStr, status: p.status as "Aguardando" | "Atrasada" | "Paga" }))
+        ? parcelasPreview.map((p, idx) => ({
+            numero: p.numero,
+            valor: p.valor,
+            vencimento: p.vencimentoStr,
+            status: (idx < parcelasPagas ? "Paga" : p.status) as "Aguardando" | "Atrasada" | "Paga"
+          }))
         : [{ numero: 1, valor: total, vencimento: dataVencimento, status: "Aguardando" as const }]
 
       adicionarContrato({
-        clienteId,
+        clienteId: contratoClienteId,
         nome,
         cpf,
         telefone,
@@ -231,6 +267,8 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
         numParcelas,
         intervalo: intervaloParcelas,
         parcelas: parcelasContrato,
+        dataInicio: dataInicio || undefined,
+        parcelasPagas,
       })
     }
 
@@ -327,20 +365,38 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
     doc.setTextColor(150, 150, 150)
     doc.text(`Documento gerado em ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")} — Hash: ${hash}`, margin, 287)
 
-    doc.save(`termo_mutuo_${Date.now()}.pdf`)
-
-    // 3. Open WhatsApp
-    const phoneDigits = extrairDigitosTelefone(telefone)
-    if (phoneDigits) {
-      const parcelasInfo = numParcelas > 1 ? ` em ${numParcelas}x de R$ ${(total / numParcelas).toFixed(2)}` : ""
-      const msg = `Olá, ${nome}. Segue o link com o Termo de Acordo Financeiro e Nota Promissória referente ao seu limite aprovado hoje. Valor total a acertar: R$ ${totalFormatado}${parcelasInfo} com vencimento${numParcelas > 1 ? " da primeira parcela" : ""} em ${dataVencimento}. Por favor, responda a esta mensagem com 'DE ACORDO' ou assine o documento anexo para validação do saldo na sua conta. Obrigado.`
-      window.open(`https://api.whatsapp.com/send?phone=55${phoneDigits}&text=${encodeURIComponent(msg)}`, "_blank")
+    // Attach document images on separate pages
+    const attachImagePage = (dataUrl: string, label: string) => {
+      doc.addPage()
+      doc.setFillColor(30, 30, 30)
+      doc.rect(margin, margin, contentW, 12, "F")
+      doc.setTextColor(0, 229, 91)
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(10)
+      doc.text(label, pageW / 2, margin + 8, { align: "center" })
+      try {
+        const imgFormat = dataUrl.includes("image/png") ? "PNG" : "JPEG"
+        const pageHeight = doc.internal.pageSize.getHeight()
+        const maxW = contentW
+        const maxH = pageHeight - margin * 2 - 20
+        doc.addImage(dataUrl, imgFormat, margin, margin + 18, maxW, maxH, undefined, "FAST")
+      } catch {
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(9)
+        doc.setTextColor(255, 100, 100)
+        doc.text("Erro ao incorporar imagem.", margin, margin + 30)
+      }
     }
 
-    // 4. Success log
-    window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[SYSTEM_AUTH] ${time} — Contrato PDF gerado com sucesso. Token hash criptográfico anexado. Disparo enviado para o WhatsApp de ${nome}.` }))
+    if (arquivoPreview) attachImagePage(arquivoPreview, "DOCUMENTO DE IDENTIFICAÇÃO — RG / CNH")
+    if (arquivoComprovantePreview) attachImagePage(arquivoComprovantePreview, "COMPROVANTE DE ENDEREÇO")
 
-    // 5. Reset & close
+    doc.save(`termo_mutuo_${Date.now()}.pdf`)
+
+    // 3. Success log
+    window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[SYSTEM_AUTH] ${time} — Contrato PDF gerado com sucesso. Hash criptográfico anexado. Contrato registrado para ${nome}.` }))
+
+    // 4. Reset & close
     resetForm()
   }
 
@@ -349,7 +405,8 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
     setCpf("")
     setEndereco("")
     setTelefone("")
-    removerArquivo()
+    removerArquivo("rg")
+    removerArquivo("comprovante")
     setValorRaw("")
     setTaxa("20")
     setTipoJuros("simples")
@@ -360,9 +417,11 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
     setJurosMora("2")
     setMultaDiaria("1")
     setDiasSimulados("")
-    setStep("busca")
+    setDataInicio("")
+    setParcelasPagas(0)
     setBuscaInput("")
     setClienteEncontrado(null)
+    setClienteBloqueado(false)
     setClienteId("")
     onClose()
   }
@@ -385,56 +444,42 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
             </button>
           </div>
 
-          {/* Step: Busca */}
-          {step === "busca" && (
-            <div className="space-y-4">
-              <h3 className="text-sm text-[#e0e0e0] font-mono font-[500]">Identificar Cliente</h3>
-              <p className="text-[10px] text-[#666] font-mono">Digite o CPF ou Nome do cliente para localizar no sistema.</p>
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={buscaInput}
-                  onChange={(e) => { setBuscaInput(e.target.value); setClienteEncontrado(null) }}
-                  onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-                  placeholder="Digitar CPF ou Nome do Cliente"
-                  className="flex-1 bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
-                />
-                <button
-                  onClick={handleBuscar}
-                  disabled={!buscaInput.trim()}
-                  className="px-5 py-2.5 text-sm font-mono font-[600] text-[#00e55b] border border-[#00e55b]/50 rounded-lg hover:bg-[#00e55b]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-base">search</span>
-                  BUSCAR
-                </button>
-              </div>
-
-              {clienteEncontrado === false && (
-                <div className="bg-[#ffb4ab]/10 border border-[#ffb4ab]/30 rounded-lg p-4 space-y-3">
-                  <p className="text-xs text-[#ffb4ab] font-mono flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">warning</span>
-                    Cliente não localizado no sistema.
-                  </p>
-                  <button
-                    onClick={iniciarCadastro}
-                    className="w-full px-4 py-2.5 text-sm font-mono font-[600] text-[#00e55b] border border-[#00e55b]/50 rounded-lg hover:bg-[#00e55b]/10 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-base">person_add</span>
-                    + Cadastrar Novo Perfil Confidencial
-                  </button>
-                </div>
-              )}
+          {/* Identificar Cliente */}
+          <div className="mb-6">
+            <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-3">Identificar Cliente</p>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={buscaInput}
+                onChange={(e) => { setBuscaInput(e.target.value); setClienteEncontrado(null) }}
+                onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
+                placeholder="Buscar por CPF ou Nome do Cliente"
+                className="flex-1 bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
+              />
+              <button
+                onClick={handleBuscar}
+                disabled={!buscaInput.trim()}
+                className="px-5 py-2.5 text-sm font-mono font-[600] text-[#00e55b] border border-[#00e55b]/50 rounded-lg hover:bg-[#00e55b]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">search</span>
+                BUSCAR
+              </button>
             </div>
-          )}
 
-          {/* Step: Cadastro */}
-          {step === "cadastro" && (
-            <CadastroCliente onSalvar={preencherDeCadastro} onVoltar={() => { setStep("busca"); setClienteEncontrado(null) }} />
-          )}
+            {clienteEncontrado === true && (
+              <div className="mt-3 bg-[#00e55b]/10 border border-[#00e55b]/30 rounded-lg px-4 py-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-[#00e55b]">check_circle</span>
+                <span className="text-xs text-[#00e55b] font-mono">Cliente Cadastrado — dados pessoais bloqueados</span>
+              </div>
+            )}
+            {clienteEncontrado === false && (
+              <div className="mt-3 bg-[#ffb4ab]/10 border border-[#ffb4ab]/30 rounded-lg px-4 py-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-[#ffb4ab]">person_add</span>
+                <span className="text-xs text-[#ffb4ab] font-mono">Cliente não encontrado — preencha os dados para novo cadastro</span>
+              </div>
+            )}
+          </div>
 
-          {/* Step: Contrato */}
-          {step === "contrato" && (
-          <>
           {/* Dados do Cliente */}
           <div className="mb-6">
             <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-3">Dados do Cliente</p>
@@ -445,8 +490,9 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
                   type="text"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
+                  disabled={clienteBloqueado}
                   placeholder="Ex: Marcos da Silva"
-                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
+                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -455,8 +501,9 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
                   type="text"
                   value={cpf}
                   onChange={(e) => setCpf(mascararCPF(e.target.value))}
+                  disabled={clienteBloqueado}
                   placeholder="000.000.000-00"
-                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
+                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -465,8 +512,9 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
                   type="text"
                   value={endereco}
                   onChange={(e) => setEndereco(e.target.value)}
+                  disabled={clienteBloqueado}
                   placeholder="Rua, número, bairro e ponto de referência"
-                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
+                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -475,62 +523,97 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
                   type="text"
                   value={telefone}
                   onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+                  disabled={clienteBloqueado}
                   placeholder="(00) 00000-0000"
-                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors"
+                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] placeholder:text-[#666]/40 outline-none focus:border-[#00e55b]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
           </div>
 
-          {/* Módulo de Anexo de Documentos */}
-          <div className="mb-6">
-            <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-3">Anexo de Documentos</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.pdf"
-              onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
-              className="hidden"
-            />
-            {!arquivo ? (
-              <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  handleFileSelect(e.dataTransfer.files?.[0] ?? null)
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-zinc-800 bg-zinc-950/40 rounded-xl p-6 text-center hover:border-[#00FF66]/50 transition-all cursor-pointer"
+          {clienteEncontrado === false && nome.trim() && cpf.replace(/\D/g, "").length >= 11 && (
+            <div className="mb-6">
+              <button
+                onClick={handleRegistrarNovo}
+                className="w-full px-4 py-3 text-sm font-mono font-[600] text-[#00e55b] border border-[#00e55b]/50 rounded-lg hover:bg-[#00e55b]/10 transition-colors flex items-center justify-center gap-2"
               >
-                <Upload className="mx-auto mb-3 text-[#666]" size={32} />
-                <p className="text-xs text-[#e0e0e0] font-mono mb-1">
-                  ARRASTE OU CLIQUE PARA FAZER UPLOAD DO RG / CNH / DOCUMENTOS
-                </p>
-                <p className="text-[10px] text-[#666] font-mono">
-                  Formatos suportados: JPG, PNG, PDF (Máx: 5MB). Os arquivos serão encriptados na Base64.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-black/60 border border-zinc-800 rounded-xl p-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  {arquivo.type.startsWith("image/") && arquivoPreview ? (
-                    <img src={arquivoPreview} alt="" className="w-10 h-10 rounded object-cover border border-zinc-700 shrink-0" />
-                  ) : (
-                    <span className="material-symbols-outlined text-[#00e55b] text-lg shrink-0">description</span>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm text-[#e0e0e0] font-mono truncate">{arquivo.name}</p>
-                    <p className="text-[10px] text-[#666] font-mono">{(arquivo.size / 1024).toFixed(1)} KB</p>
-                  </div>
-                </div>
-                <button
-                  onClick={removerArquivo}
-                  className="material-symbols-outlined text-[#FF3838] hover:text-[#ff6b6b] transition-colors text-lg shrink-0"
+                <span className="material-symbols-outlined text-base">person_add</span>
+                REGISTRAR CLIENTE E CONTINUAR
+              </button>
+            </div>
+          )}
+
+          {/* Anexo de Documentos */}
+          <div className="mb-6 space-y-4">
+            <p className="text-[10px] text-[#666] font-mono uppercase tracking-wider mb-3">Documentos do Cliente</p>
+
+            {/* RG / CNH */}
+            <div>
+              <p className="text-[10px] text-[#999] font-mono mb-2">RG / CNH / Documento com Foto</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".jpg,.jpeg,.png"
+                onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null, "rg")}
+                className="hidden"
+              />
+              {!arquivo ? (
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); handleFileSelect(e.dataTransfer.files?.[0] ?? null, "rg") }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-zinc-800 bg-zinc-950/40 rounded-xl p-4 text-center hover:border-[#00FF66]/50 transition-all cursor-pointer"
                 >
-                  close
-                </button>
-              </div>
-            )}
+                  <Upload className="mx-auto mb-2 text-[#666]" size={24} />
+                  <p className="text-[11px] text-[#e0e0e0] font-mono">Clique ou arraste o documento (JPG/PNG)</p>
+                </div>
+              ) : (
+                <div className="bg-black/60 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={arquivoPreview} alt="" className="w-10 h-10 rounded object-cover border border-zinc-700 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-[#e0e0e0] font-mono truncate">{arquivo.name}</p>
+                      <p className="text-[10px] text-[#666] font-mono">{(arquivo.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                  </div>
+                  <button onClick={() => removerArquivo("rg")} className="material-symbols-outlined text-[#FF3838] hover:text-[#ff6b6b] transition-colors text-lg shrink-0">close</button>
+                </div>
+              )}
+            </div>
+
+            {/* Comprovante de Endereço */}
+            <div>
+              <p className="text-[10px] text-[#999] font-mono mb-2">Comprovante de Endereço</p>
+              <input
+                ref={fileInputComprovanteRef}
+                type="file"
+                accept=".jpg,.jpeg,.png"
+                onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null, "comprovante")}
+                className="hidden"
+              />
+              {!arquivoComprovante ? (
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); handleFileSelect(e.dataTransfer.files?.[0] ?? null, "comprovante") }}
+                  onClick={() => fileInputComprovanteRef.current?.click()}
+                  className="border-2 border-dashed border-zinc-800 bg-zinc-950/40 rounded-xl p-4 text-center hover:border-[#00FF66]/50 transition-all cursor-pointer"
+                >
+                  <Upload className="mx-auto mb-2 text-[#666]" size={24} />
+                  <p className="text-[11px] text-[#e0e0e0] font-mono">Clique ou arraste o comprovante (JPG/PNG)</p>
+                </div>
+              ) : (
+                <div className="bg-black/60 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={arquivoComprovantePreview} alt="" className="w-10 h-10 rounded object-cover border border-zinc-700 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-[#e0e0e0] font-mono truncate">{arquivoComprovante.name}</p>
+                      <p className="text-[10px] text-[#666] font-mono">{(arquivoComprovante.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                  </div>
+                  <button onClick={() => removerArquivo("comprovante")} className="material-symbols-outlined text-[#FF3838] hover:text-[#ff6b6b] transition-colors text-lg shrink-0">close</button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Parâmetros Financeiros */}
@@ -645,6 +728,30 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
                   <option value="semanal">Semanal</option>
                 </select>
               </div>
+              <div>
+                <label className="text-[10px] text-[#666] font-mono block mb-1.5">Data de Início do Contrato</label>
+                <input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] outline-none focus:border-[#00e55b]/50 transition-colors [color-scheme:dark]"
+                />
+                <p className="text-[9px] text-[#666] font-mono mt-1">Deixe em branco para usar a data de hoje</p>
+              </div>
+              {numParcelas > 1 && (
+                <div>
+                  <label className="text-[10px] text-[#666] font-mono block mb-1.5">Parcelas já Pagas</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={numParcelas}
+                    value={parcelasPagas}
+                    onChange={(e) => setParcelasPagas(Math.min(numParcelas, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                    className="w-full bg-black/40 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-[#e0e0e0] outline-none focus:border-[#00e55b]/50 transition-colors"
+                  />
+                  <p className="text-[9px] text-[#666] font-mono mt-1">Quantidade de parcelas já pagas antes deste cadastro</p>
+                </div>
+              )}
               <div>
                 <label className="text-[10px] text-[#666] font-mono block mb-1.5">Juros de Atraso (% de Mora)</label>
                 <div className="relative">
@@ -817,7 +924,6 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
               GERAR CONTRATO & INJETAR NA RUA
             </button>
           </div>
-          </>)}
         </div>
       </div>
     </>

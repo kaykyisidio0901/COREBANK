@@ -11,9 +11,8 @@ import PainelAdmin from "./pages/PainelAdmin"
 import Login from "./pages/Login"
 
 function AppRoutes() {
-  const { isAuthenticated, user, tenantId } = useApp()
+  const { isAuthenticated } = useApp()
   if (!isAuthenticated) return <Login />
-  const isAdmin = user === "admin" && tenantId === "corebank"
   return (
     <Routes>
       <Route element={<Layout />}>

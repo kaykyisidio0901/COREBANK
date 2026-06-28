@@ -51,6 +51,13 @@ app.get("/api/clientes/:id", requireTenant, (req, res) => {
 app.post("/api/clientes", requireTenant, (req, res) => {
   const { id, nome, cpf, telefone, endereco, enderecoComercial, notaInterna, fep, telefone2, telefone3, enderecoSecundario, rgBase64, comprovanteBase64 } = req.body
   if (!id || !nome) return res.status(400).json({ error: "id e nome são obrigatórios" })
+
+  // Prevent duplicate CPF within the same tenant
+  if (cpf) {
+    const existing = db.prepare("SELECT id FROM clientes WHERE tenant_id = ? AND cpf = ? AND id != ?").get(req.tenantId, cpf, id)
+    if (existing) return res.status(409).json({ error: "CPF já cadastrado para outro cliente neste tenant", clienteExistenteId: existing.id })
+  }
+
   db.prepare(`
     INSERT INTO clientes (id, tenant_id, nome, cpf, telefone, endereco, endereco_comercial, nota_interna, fep, telefone2, telefone3, endereco_secundario, rg_base64, comprovante_base64, score, nivel)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 500, 'Baixo')
