@@ -34,7 +34,7 @@ function gerarHash() {
 
 function somarDias(data: Date, dias: number) {
   const d = new Date(data)
-  d.setDate(d.getDate() + dias)
+  d.setDate(d.getDate() + Number(dias))
   return d
 }
 
@@ -121,9 +121,9 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
 
   const valorNumerico = parseFloat(valorRaw.replace(/\./g, "").replace(",", ".")) || 0
   const taxaNumerica = parseFloat(taxa) || 0
-  const prazoFinal = prazo === 0 ? (parseInt(prazoCustom, 10) || 0) : prazo
-  const intervaloDias = intervaloParcelas === "mensal" ? 30 : intervaloParcelas === "quinzenal" ? 15 : 7
-  const prazoEfetivo = numParcelas > 1 ? numParcelas * intervaloDias : prazoFinal
+  const prazoFinal = Number(prazo === 0 ? (parseInt(prazoCustom, 10) || 0) : prazo)
+  const intervaloDias = Number(intervaloParcelas === "mensal" ? 30 : intervaloParcelas === "quinzenal" ? 15 : 7)
+  const prazoEfetivo = Number(numParcelas > 1 ? numParcelas * intervaloDias : prazoFinal)
   const dataBase = dataInicio ? new Date(dataInicio + "T12:00:00") : new Date()
 
   const calcularJuros = useCallback(() => {
