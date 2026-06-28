@@ -42,7 +42,7 @@ function TableRow({ item }: { item: FlowItem }) {
         R$ {item.value.toFixed(2)}
       </td>
       <td className={`py-4 px-4 text-sm ${isLate ? "text-[#ffb4ab]" : "text-[#e0e0e0]"}`}>
-        {isLate ? `Atrasado ${item.lateDays}d` : "Hoje"}
+        {isLate ? `Atrasado ${item.lateDays}d` : item.dueDate}
         {isLate && item.lateFee && (
           <span className="text-[10px] text-[#ffb4ab]/70 block">+R$ {item.lateFee}/dia</span>
         )}
@@ -76,7 +76,7 @@ function MobileCard({ item }: { item: FlowItem }) {
       </div>
       <div className="flex items-center justify-between mb-3">
         <span className={`text-xs font-mono ${isLate ? "text-[#ffb4ab]" : "text-[#e0e0e0]"}`}>
-          {isLate ? `Atrasado ${item.lateDays}d` : "Vence hoje"}
+          {isLate ? `Atrasado ${item.lateDays}d` : item.dueDate}
         </span>
         {isLate ? (
           <span className="px-2 py-0.5 border border-[#ffb4ab]/30 text-[10px] text-[#ffb4ab] font-mono rounded">ATRASADO</span>
