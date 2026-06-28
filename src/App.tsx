@@ -6,6 +6,7 @@ import { Clientes } from "./pages/Clientes"
 import { Agenda } from "./pages/Agenda"
 import { Caixa } from "./pages/Caixa"
 import { GestaoCapital } from "./pages/GestaoCapital"
+import { LanctoRetroativo } from "./pages/LanctoRetroativo"
 import { Configuracoes } from "./pages/Configuracoes"
 import PainelAdmin from "./pages/PainelAdmin"
 import Login from "./pages/Login"
@@ -22,6 +23,7 @@ function AppRoutes() {
         <Route path="/fluxo" element={<Caixa />} />
         <Route path="/capital" element={<GestaoCapital />} />
         <Route path="/config" element={<Configuracoes />} />
+        <Route path="/retroativo" element={<LanctoRetroativo />} />
         <Route path="/admin" element={<PainelAdmin />} />
       </Route>
     </Routes>

@@ -47,6 +47,7 @@ interface AppContextType {
     parcelas: ParcelaContrato[]
     dataInicio?: string
     parcelasPagas?: number
+    skipSaldo?: boolean
   }) => Contrato
   registrarPagamento: (clienteNome: string, valor: number, contratoId: string) => void
   isCamouflaged: boolean
@@ -437,6 +438,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     parcelas: ParcelaContrato[]
     dataInicio?: string
     parcelasPagas?: number
+    skipSaldo?: boolean
   }): Contrato => {
     const hex = "0123456789abcdef"
     let hash = "CTR-"
@@ -489,13 +491,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
     )
 
-    // Deduct from available balance
-    setSaldoDisponivel((prev) => prev - params.valorPrincipal)
+    // Deduct from available balance (skip for retroactive contracts)
+    if (!params.skipSaldo) {
+      setSaldoDisponivel((prev) => prev - params.valorPrincipal)
+    }
 
     // Log as SAÍDA in transacoes
-    setTransacoes((prev) => [{ timestamp: nowTimestamp(), tipo: "EMPRÉSTIMO", descricao: `Novo empréstimo para ${params.nome}`, origem: params.nome, hash: gerarHashCurto(), valor: params.valorPrincipal, contratoId: hash, clienteId: params.clienteId }, ...prev])
+    const tipoTransacao = params.skipSaldo ? "ENTRADA" : "EMPRÉSTIMO"
+    const descTransacao = params.skipSaldo
+      ? `Lançamento retroativo importado para ${params.nome}`
+      : `Novo empréstimo para ${params.nome}`
+    setTransacoes((prev) => [{ timestamp: nowTimestamp(), tipo: tipoTransacao as "EMPRÉSTIMO" | "ENTRADA", descricao: descTransacao, origem: params.nome, hash: gerarHashCurto(), valor: params.valorPrincipal, contratoId: hash, clienteId: params.clienteId }, ...prev])
 
-    window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CONTRATO] ${time} — Contrato ${hash} registrado para ${params.nome}. Valor: R$ ${params.valorPrincipal.toFixed(2)}. Total c/ juros: R$ ${params.valorTotal.toFixed(2)} em ${params.numParcelas}x. Saldo debitado: R$ ${params.valorPrincipal.toFixed(2)}.` }))
+    const saldoMsg = params.skipSaldo ? "Saldo não alterado (retroativo)" : `Saldo debitado: R$ ${params.valorPrincipal.toFixed(2)}`
+    window.dispatchEvent(new CustomEvent("corebank:log", { detail: `[CONTRATO] ${time} — Contrato ${hash} registrado para ${params.nome}. Valor: R$ ${params.valorPrincipal.toFixed(2)}. Total c/ juros: R$ ${params.valorTotal.toFixed(2)} em ${params.numParcelas}x. ${saldoMsg}.` }))
 
     api.createContrato(tenantId, {
       id: contrato.id,

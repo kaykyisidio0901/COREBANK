@@ -193,6 +193,16 @@ export function Dashboard() {
             <span className="material-symbols-outlined text-[#666] group-hover:translate-x-1 transition-transform">chevron_right</span>
           </button>
           <button
+            onClick={() => navigate("/retroativo")}
+            className="w-full h-12 flex items-center justify-between px-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm hover:bg-zinc-800 transition-all group active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-[#ffb4ab]">history</span>
+              <span className="text-sm text-[#e0e0e0] font-mono truncate">LANÇAMENTO RETROATIVO</span>
+            </div>
+            <span className="material-symbols-outlined text-[#666] group-hover:translate-x-1 transition-transform">chevron_right</span>
+          </button>
+          <button
             onClick={() => exportarRelatorio(clientes, contratos, transacoes, flowItems, saldoDisponivel)}
             className="w-full h-12 flex items-center justify-between px-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm hover:bg-zinc-800 transition-all group active:scale-[0.98]"
           >
