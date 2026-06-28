@@ -47,10 +47,13 @@ export function LanctoRetroativo() {
 
   function handleBuscar() {
     const termo = busca.trim().toLowerCase()
-    if (!termo) return
-    const encontrado = clientes.find(
-      (c) => c.cpf.replace(/\D/g, "").includes(termo.replace(/\D/g, "")) || c.nome.toLowerCase().includes(termo)
-    )
+    if (termo.length < 3) return
+    const digitos = termo.replace(/\D/g, "")
+    const encontrado = clientes.find((c) => {
+      if (digitos.length >= 3 && c.cpf.replace(/\D/g, "").includes(digitos)) return true
+      if (c.nome.toLowerCase().includes(termo)) return true
+      return false
+    })
     if (encontrado) {
       setClienteEncontrado(encontrado)
       setClienteNaoEncontrado(false)

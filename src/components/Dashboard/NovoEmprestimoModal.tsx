@@ -84,11 +84,14 @@ export function NovoEmprestimoModal({ open, onClose, onContratoGerado }: NovoEmp
   const fileInputComprovanteRef = useRef<HTMLInputElement>(null)
 
   const handleBuscar = () => {
-    const q = buscaInput.toLowerCase().replace(/\D/g, "")
-    const match = clientes.find((c) =>
-      c.nome.toLowerCase().includes(buscaInput.toLowerCase()) ||
-      c.cpf.replace(/\D/g, "").includes(q)
-    )
+    const termo = buscaInput.toLowerCase()
+    if (termo.length < 3) return
+    const digitos = termo.replace(/\D/g, "")
+    const match = clientes.find((c) => {
+      if (digitos.length >= 3 && c.cpf.replace(/\D/g, "").includes(digitos)) return true
+      if (c.nome.toLowerCase().includes(termo)) return true
+      return false
+    })
     if (match) {
       setClienteEncontrado(true)
       setClienteBloqueado(true)
